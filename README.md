@@ -132,13 +132,7 @@ python3 scripts/audit_icebreaker.py .work/recruiter_jd.json 话术.md 事实库.
 AUTHORIZED=1 bash scripts/process_job.sh --url <岗位URL> --send --msg 话术.txt
 ```
 
-> 📝 **关于上面这些产物文件（无需你手动创建）**：
-> - `事实库.md` / `工作事实`：由 Agent 依据你的**简历 + Step 0 生成的 `profile.yaml`** 在工作流中产出，不是脚本读取的预设文件。
-> - `话术.md`：由 `audit_icebreaker.py`（Step 5 本地草稿）或 hosted 后端 emit 的计划产出，你需要做的只是审核它。
-> - `keys.json`：**可选**的事实锚点文件（用于自动事实覆盖率检查），非强制；不提供时流程照常运行。
-> - `话术.txt`：本地发送用的消息正文，由上述话术经 Agent 整理得到。
->
-> **运行前无需手动创建以上任何文件**——它们都在工作流推进中由 Agent 生成/补全。
+> 📝 上面命令里的 `话术.md` / `事实库.md` / `keys.json` / `话术.txt` 都由 Agent 在工作流中生成/补全，**运行前无需手动创建**：`事实库.md`（来自你的简历 + `profile.yaml`）、`话术.md`（audit_icebreaker 或 hosted emit 产出，你只审核）、`keys.json`（可选锚点，不提供照常跑）、`话术.txt`（本地发送正文）。
 
 完整工作流、纪律与脚本参数见 **[SKILL.md](SKILL.md)**。
 
