@@ -1,0 +1,24 @@
+# ===== 用户私有数据（不进仓库）=====
+# profile.yaml 是个人求职画像；target_library.csv 是个人岗位库
+profile.yaml
+target_library.csv
+# Agent 运行中产生的待评估/搜索结果 CSV
+待评估*.csv
+search_results*.csv
+*待评估*.csv
+
+# ===== 中间产物 =====
+.work/
+__pycache__/
+*.pyc
+
+# ===== agent-browser-runtime 运行时（相邻部署，不混入本仓库）=====
+data/
+artifacts/
+.env
+runtime/profile/
+
+# ===== Python 虚拟环境 =====
+venv/
+.venv/
+env/

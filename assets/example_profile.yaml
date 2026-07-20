@@ -1,0 +1,66 @@
+# ============================================================
+# 示例 profile（虚构候选人「李明」，用于演示 schema，非真实数据）
+# 演示：5 年经验、月薪 4 万以上、北京、策略产品经理 的画像应如何填写。
+# 你部署时请用 assets/profile_template.yaml 生成自己的 profile.yaml。
+# ============================================================
+
+meta:
+  candidate_name: "李明"
+  generated_at: "2026-07-19"
+  notes: "虚构示例，用于演示 boss-zhipin-copilot 的输入契约"
+
+goal: "我想找要求 5 年以上经验、月薪 4 万以上的策略产品经理岗位（北京），偏好 C 端/增长/AI 应用方向"
+
+search:
+  city: "北京"
+  queries:
+    - "策略产品经理 北京"
+    - "产品经理 策略 北京"
+    - "高级产品经理 北京"
+    - "增长策略产品经理 北京"
+
+thresholds:
+  city: "北京"
+  salary_floor: 40000
+  seniority_years: 5
+  stage_allow: ["成长期", "不需要融资", "未融资", "已上市"]
+  scale_max: 5000
+  employment_type: "全职"
+
+hard_exclude:
+  - category: "广告/IAA"
+    keywords: ["IAA", "广告变现", "买量", "穿山甲", "AdMob", "信息流广告产品"]
+  - category: "IoT/硬件"
+    keywords: ["固件", "嵌入式", "智能硬件", "物联网平台", "Health Kit"]
+  - category: "B端/SaaS平台PM"
+    keywords: ["B端", "SaaS", "企业服务", "中后台", "平台产品", "ERP", "CRM", "私有化", "PaaS"]
+  - category: "半导体/芯片"
+    keywords: ["半导体", "芯片", "IC设计", "光刻"]
+  - category: "金融资质"
+    keywords: ["证券从业", "基金从业", "财富管理", "交易系统"]
+  - category: "Web3/加密"
+    keywords: ["Web3", "虚拟币", "NFT", "元宇宙", "区块链", "crypto", "DeFi"]
+
+boost_keywords:
+  - "增长"
+  - "留存"
+  - "付费转化"
+  - "C端"
+  - "0-1"
+  - "Agent"
+  - "会员"
+  - "策略"
+  - "数据驱动"
+  - "商业化"
+
+fact_anchors:
+  - anchor: "用户增长"
+    evidence: "星辰互娱渠道增长，次留提升 3%，线索成本降 50%（示例数字）"
+  - anchor: "0-1 产品"
+    evidence: "主导轻阅工具产品从 0 到 1 独立上线，3 个月获客 10 万（示例）"
+  - anchor: "付费转化"
+    evidence: "设计会员付费路径，付费转化率提升 18%（示例）"
+  - anchor: "AI 应用"
+    evidence: "用 Codex/Claude 搭建个人 Agent 原型，自动化内容生成工作流（示例）"
+  - anchor: "数据分析"
+    evidence: "搭建增长数据看板，定位流失预警节点，挽回率提升 12%（示例）"
