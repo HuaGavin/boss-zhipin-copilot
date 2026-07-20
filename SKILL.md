@@ -5,8 +5,6 @@ description: >-
   输入 = 简历/工作事实文件 + 求职目标，或仅一句目标句；输出 = profile（检索词+硬排除+评分门槛+事实锚点）、目标岗位库、破冰话术。强制走后端正门、真实光标、限速、撞墙停手、授权门控，绝不裸 CDP。
 ---
 
-# boss-zhipin-copilot
-
 通用、可配置、开源的 BOSS 直聘求职 copilot：把「简历 + 求职目标」沉淀为可复用能力——自动建岗位画像与检索词、建评分机制、建岗位库、检索收藏、写破冰话术、按授权发送。
 
 > 🔌 **应用层架构**：浏览器运行时由「仿真人浏览器后端」经 `bz_*` 契约即插即用提供。默认 [agent-browser-runtime](https://github.com/energypantry/agent-browser-runtime)（真实光标）；亦支持 [Codex](https://developers.openai.com/codex/app/chrome-extension) 托管（生成可粘贴提示词）。**所有浏览器动作只经后端正门真实光标执行，绝不直连 CDP。**
