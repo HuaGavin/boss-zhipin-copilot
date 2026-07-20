@@ -39,11 +39,16 @@
 |------|---------------|------|-----------|-----------|-----------|-----------|
 | **agent-browser-runtime** | `brs` | local | 开源 MIT | 真实 Chromium + companion 扩展 + broker 租约 + 人性化限速（**首选，最贴合 BOSS 直聘**） | ✅ **已实现且默认** | https://github.com/energypantry/agent-browser-runtime |
 | **OpenAI Codex** | `codex` | hosted | 需 ChatGPT Plus/Pro + Codex 桌面端 | 真实登录态 Chrome + 官方扩展 + Computer Use 光标 + 网站许可/黑名单 | ✅ **已实现（hosted：生成 @Chrome 提示词）** | https://developers.openai.com/codex/app/chrome-extension |
-| **CloakBrowser** | `cloak` | local | 开源 MIT | 源码级改指纹隐身 Chromium + `humanize=True`（贝塞尔鼠标/逐字键入/惯性滚动）+ Playwright 直接替换 | 🟡 骨架+API 映射（待实现驱动） | https://github.com/CloakHQ/cloakbrowser |
+| **CloakBrowser** | `cloak` | local | 开源 MIT | 源码级改指纹隐身 Chromium + `humanize=True`（贝塞尔鼠标/逐字键入/惯性滚动）+ Playwright 直接替换 | 🔴 **status: not-implemented (skeleton only)** | https://github.com/CloakHQ/cloakbrowser |
 | **agent-browser (Vercel)** | `agent_browser` | local | 开源 | 无障碍树 `@eX` 引用交互（轻量，非反检测路线） | ⚪ 文档候选（未实现） | https://github.com/vercel-labs/agent-browser |
 
 > 选型建议：**本地全自动优先 `brs`**；已用 Codex 生态、愿意人工粘贴提示词的用 `codex`；
 > 想要「免 Docker、源码级隐身」可等 `cloak` 驱动实现。
+
+> ⚠️ **`cloak` 后端当前为「骨架（skeleton only），未实现驱动」**：`scripts/backends/cloak.sh` 仅做了 API 映射占位，
+> 并未实现任何 `bz_*` 契约函数。任何动作都会 **fail-loud**（不要设置 `BZC_BACKEND=cloak`）。
+> 若要实现，应在 `scripts/backends/cloak.sh` 中补齐第一节的全部「必须」函数（`bz_mode` / `bz_status` / `bz_browse_start` / `bz_browse_html` / `bz_browse_end` / `bz_ui` / `bz_extract`），
+> 并保证 `bz_status` 能真正探测隐身 Chromium 光标已就绪，否则宁可 fail-loud 也不要盲跑。
 
 ---
 

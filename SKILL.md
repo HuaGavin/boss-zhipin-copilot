@@ -51,6 +51,8 @@ description: >-
 - **R3** 限速强制：动作间隔 ≥`ACTION_INTERVAL_SECONDS`(5s)，每日收藏+开聊 ≤`DAILY_CAP`(100)。
 - **R4** 撞墙即停：验证码/滑块 → 停手交人工，冷却 ≥24h，绝不恢复自动化（`exit 3`）。
 - **R5** 授权门控：书签需批次授权；发消息需**每岗** `AUTHORIZED=1`。
+  **门控对两种后端一致**：本地 `brs` 与托管 `codex`（hosted）的真实光标发送**都**必须 `AUTHORIZED=1`。
+  > ⚠️ hosted 模式**未授权时绝不 emit 任何「发送」计划**——`bz_emit_plan` 在遇到发送动作且 `AUTHORIZED≠1` 时只产出浏览/读 JD/本地成稿步骤，绝不生成发送步骤（等价于 `exit 4` 拒绝）。
 - **R6** 合并打开、避免无谓重开（同次任务合并书签+读JD+授权发送）。
 - **R7** 预飞 1 岗跑通整条路径，再复制其余。
 - **R8** 单 lease 连续 tab，批量不杀重启（burst）。
@@ -90,6 +92,9 @@ description: >-
 
 - `bash scripts/process_job.sh --url <岗URL> --read-jd --out recruiter_jd.json`
   → 解析 `.job-boss-info .name`（真实招聘方，**非登录账号**）/ `.job-sec-text`（完整 JD）/ `.sider-company`。
+- **输出契约（重要）**：`--read-jd` 现在写出的 `recruiter_jd.json` 是一个 **JSON 列表**
+  `[{id, title, jd, recruiter, company}, ...]`（每岗一个元素；批量读 JD 时列表含多个元素）。
+  > ⚠️ 旧 prose 曾暗示「单 dict」——已废止。消费方须按**列表**处理。
 - 此 JSON 是后续话术的**唯一 JD 依据**。
 
 ### Step 4 · 写破冰话术（icebreaker writer，通用）
@@ -103,6 +108,8 @@ description: >-
 4. **自检 gate**：`python3 scripts/audit_icebreaker.py recruiter_jd.json 话术.md 事实库.md keys.json`
    要求 **JD≥90% 且 事实≥90%**（keys 字典由 Agent 为当批每岗写 `jd/fact` 锚点，写字典即强制精读 JD）。
    不达标 → 重写未命中岗。
+   > **输入契约**：`recruiter_jd.json` 为 Step 3 产出的 **JSON 列表**；`audit_icebreaker.py` 按列表逐岗消费，
+   > 并内置 `isinstance` 兜底——若传入的是单个 dict（旧格式/单岗）也能正常运行，不必手动包装成列表。
 5. 完成即**停等用户审核**，不自动发送。
 
 ### Step 5 · 发送或仅本地（授权门控）
@@ -141,7 +148,7 @@ description: >-
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `BZC_BACKEND` | `brs` | 浏览器后端名：`brs` / `codex` / `cloak`（详见 `references/browser_backend.md`） |
+| `BZC_BACKEND` | `brs` | 浏览器后端名：`brs`（默认，已实现）/ `codex`（hosted，已实现）/ `cloak`（仅骨架，**未实现驱动，勿用**，详见 `references/browser_backend.md`） |
 | `BRS_JS` | 自动探测 | brs 后端：brs.js 路径 |
 | `AGENT_BROWSER_RUNTIME_HOME` | — | brs 后端：agent-browser-runtime 根目录（辅助探测） |
 | `NODE` / `PYTHON` | `node` / `python3` | 可执行 |

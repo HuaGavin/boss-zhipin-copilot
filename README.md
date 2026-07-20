@@ -68,7 +68,7 @@ git clone <你的仓库地址> boss-zhipin-copilot
 
 # WorkBuddy: 拷到项目级或用户级 skills 目录
 cp -r boss-zhipin-copilot ~/.workbuddy/skills/        # 用户级
-# 或  K:/求职/求职应聘2026/求职Buddy/.workbuddy/skills/   # 项目级
+# 或  <你的项目>/.workbuddy/skills/                        # 项目级
 
 # OpenClaw: 拷到 skills 目录
 cp -r boss-zhipin-copilot ~/.openclaw/skills/
@@ -89,6 +89,9 @@ export BRS_JS="/绝对路径/agent-browser-runtime/cli/brs.js"   # 或 AGENT_BRO
 # 或 用 Codex 托管浏览器（生成 @Chrome 提示词，由 Codex 执行）
 export BZC_BACKEND=codex
 ```
+
+> ⚠️ **请勿设置 `BZC_BACKEND=cloak`**：该后端目前仅为**骨架（未实现驱动）**，任何动作都会 fail-loud。
+> 当前可用后端为 `brs`（默认，本地全自动）与 `codex`（hosted 托管）。详见 `references/browser_backend.md` 支持矩阵。
 
 脚本会自动探测 `brs.js` 常见路径；未设置/缺失任何后端会 **fail-loud** 并提示安装链接。
 支持的完整清单与如何新增后端见 `references/browser_backend.md`。
@@ -128,6 +131,14 @@ python3 scripts/audit_icebreaker.py .work/recruiter_jd.json 话术.md 事实库.
 # 6) 用户授权后发送（或仅本地成稿）
 AUTHORIZED=1 bash scripts/process_job.sh --url <岗位URL> --send --msg 话术.txt
 ```
+
+> 📝 **关于上面这些产物文件（无需你手动创建）**：
+> - `事实库.md` / `工作事实`：由 Agent 依据你的**简历 + Step 0 生成的 `profile.yaml`** 在工作流中产出，不是脚本读取的预设文件。
+> - `话术.md`：由 `audit_icebreaker.py`（Step 5 本地草稿）或 hosted 后端 emit 的计划产出，你需要做的只是审核它。
+> - `keys.json`：**可选**的事实锚点文件（用于自动事实覆盖率检查），非强制；不提供时流程照常运行。
+> - `话术.txt`：本地发送用的消息正文，由上述话术经 Agent 整理得到。
+>
+> **运行前无需手动创建以上任何文件**——它们都在工作流推进中由 Agent 生成/补全。
 
 完整工作流、纪律与脚本参数见 **[SKILL.md](SKILL.md)**。
 
