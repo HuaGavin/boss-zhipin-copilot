@@ -32,6 +32,16 @@ if [ "$SELF_MANAGED" -eq 1 ]; then
 fi
 
 RESULT=$(bz_extract "$SCRIPT_DIR/zhipin-chat.extract.js" "$LEASE" "$TAB" '{"action":"read"}' 2>&1)
-echo "$RESULT" | "$PYTHON" -c "import sys,json;d=json.load(sys.stdin);print('[ok] 解析到会话数:', len(d.get('contacts',[])))" 2>/dev/null || { echo "$RESULT"; exit 1; }
+# 校验 extract 返回的 ok 字段：ok 非 true 视为失败，打印错误并 exit 1（不静默吞掉）
+if ! echo "$RESULT" | "$PYTHON" -c "import sys, json
+d = json.load(sys.stdin)
+if not d.get('ok'):
+    sys.stderr.write('[error] extract 失败: ' + str(d.get('error', d.get('details', 'unknown'))) + '\n')
+    sys.exit(1)
+print('[ok] 解析到会话数:', len(d.get('contacts', [])))"; then
+  echo "$RESULT" >&2
+  exit 1
+fi
+mkdir -p "$(dirname "$OUT_JSON")"
 echo "$RESULT" > "$OUT_JSON"
 echo "[ok] 聊天快照 -> $OUT_JSON"

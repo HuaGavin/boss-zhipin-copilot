@@ -30,7 +30,9 @@ def extract_salary(text):
     return 0
 
 def extract_seniority(text):
-    m = re.search(r"(\d+)\s*年以上", text) or re.search(r"(\d+)\s*年", text)
+    # 限制为 1-2 位数字（排除「2026年」这类 4 位年份），且前后不得紧贴数字（C13）
+    m = re.search(r"(?<!\d)(\d{1,2})\s*年以上", text) \
+        or re.search(r"(?<!\d)(\d{1,2})\s*年(?![\d])", text)
     return int(m.group(1)) if m else 0
 
 def extract_city(text):

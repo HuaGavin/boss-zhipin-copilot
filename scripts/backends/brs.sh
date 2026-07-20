@@ -4,12 +4,20 @@
 # 安装: https://github.com/energypantry/agent-browser-runtime
 set -euo pipefail
 
-# ---- 解析 brs.js 路径（优先 $BRS_JS，否则按常见位置自动探测）----
+# ---- 解析 brs.js 路径 ----
+# 探测顺序（优先显式覆盖，再按相对仓库路径/常见位置）：
+#   1. $BRS_JS                 （显式覆盖，最高优先级）
+#   2. $AGENT_BROWSER_RUNTIME_HOME/cli/brs.js
+#   3. <repo>/../../agent-browser-runtime/cli/brs.js   （仓库的兄弟目录；repo = backends/.. = scripts/.. = 仓库根）
+#   4. $HOME/agent-browser-runtime/cli/brs.js
+#   5. $HOME/.agent-browser-runtime/cli/brs.js
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 resolve_brs() {
   if [ -n "${BRS_JS:-}" ]; then return 0; fi
   local candidates=(
     "${AGENT_BROWSER_RUNTIME_HOME:-}/cli/brs.js"
-    "$PWD/../../../agent-browser-runtime/cli/brs.js"
+    "$REPO_ROOT/../../agent-browser-runtime/cli/brs.js"
     "$HOME/agent-browser-runtime/cli/brs.js"
     "$HOME/.agent-browser-runtime/cli/brs.js"
   )

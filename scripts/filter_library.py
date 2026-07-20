@@ -19,6 +19,44 @@ try:
 except ImportError:
     sys.exit("FAIL_LOUD: 需要 pyyaml，请先 `pip install pyyaml`")
 
+# 逻辑字段 -> 候选列名（别名表，大小写不敏感）。解决「列名灵活」的自相矛盾（C4）。
+FIELD_ALIASES = {
+    "城市":     ["城市", "city", "城市名"],
+    "薪资":     ["薪资", "salary", "薪酬", "月薪", "工资"],
+    "经验要求": ["经验要求", "experience", "经验", "工作年限"],
+    "公司阶段": ["公司阶段", "stage", "融资阶段", "融资"],
+    "公司规模": ["公司规模", "size", "规模", "人数", "员工数"],
+    "类型":     ["类型", "type", "职能", "岗位类型"],
+    "URL":      ["URL", "url", "链接", "链接地址"],
+    "岗位名":   ["岗位名", "title", "职位", "岗位", "job_title", "jobtitle", "job name"],
+    "公司名":   ["公司名", "company", "公司"],
+}
+# 必需列：完全缺失时应清晰 WARNING，而非静默全拒（C4）
+REQUIRED_FIELDS = ["薪资", "URL"]
+
+def build_colmap(header):
+    """根据 CSV 表头解析每个逻辑字段对应的真实列名（优先首个匹配的别名）。"""
+    norm = {}
+    for h in (header or []):
+        if h is None:
+            continue
+        norm[(str(h).strip().lower())] = h
+    colmap = {}
+    for logical, alist in FIELD_ALIASES.items():
+        for alias in alist:
+            key = alias.lower()
+            if key in norm:
+                colmap[logical] = norm[key]
+                break
+    return colmap
+
+def gf(row, colmap, logical, default=""):
+    """按逻辑字段取真实列的值。"""
+    col = colmap.get(logical)
+    if col is None:
+        return default
+    return row.get(col, default)
+
 def parse_salary(s):
     m = re.search(r"(\d+(?:\.\d+)?)\s*[Kk]", s)
     if m:
@@ -36,7 +74,7 @@ def parse_scale(s):
     m = re.search(r"(\d+)", s)
     return int(m.group(1)) if m else None
 
-def evaluate(row, profile):
+def evaluate(row, profile, colmap):
     reasons = []
     blob = " ".join(str(v) for v in row.values())
 
@@ -48,31 +86,34 @@ def evaluate(row, profile):
 
     th = profile.get("thresholds", {}) or {}
     city = (th.get("city") or "").strip()
-    if city and city not in str(row.get("城市", "")):
+    if city and city not in str(gf(row, colmap, "城市")):
         reasons.append(f"城市不符(期望{city})")
 
     floor = int(th.get("salary_floor", 0) or 0)
-    sal = parse_salary(str(row.get("薪资", "")))
-    if floor and (sal is None or sal < floor):
-        reasons.append(f"薪资低于{floor}(实测:{sal})")
+    # 仅当「薪资列存在」时才做薪资门控；列缺失已在 main 中 WARNING 且不静默全拒（C4）
+    if floor and "薪资" in colmap:
+        sal = parse_salary(str(gf(row, colmap, "薪资")))
+        if sal is None or sal < floor:
+            reasons.append(f"薪资低于{floor}(实测:{sal})")
 
     sy = int(th.get("seniority_years", 0) or 0)
-    yrs = parse_seniority(str(row.get("经验要求", "")))
-    if sy and (yrs is None or yrs < sy):
-        reasons.append(f"经验不足{sy}年(实测:{yrs})")
+    if sy:
+        yrs = parse_seniority(str(gf(row, colmap, "经验要求")))
+        if yrs is None or yrs < sy:
+            reasons.append(f"经验不足{sy}年(实测:{yrs})")
 
     allow = th.get("stage_allow", []) or []
-    if allow and str(row.get("公司阶段", "")).strip() not in allow:
+    if allow and str(gf(row, colmap, "公司阶段")).strip() not in allow:
         reasons.append(f"阶段不在白名单{allow}")
 
     smax = int(th.get("scale_max", 0) or 0)
     if smax:
-        scl = parse_scale(str(row.get("公司规模", "")))
+        scl = parse_scale(str(gf(row, colmap, "公司规模")))
         if scl and scl > smax:
             reasons.append(f"规模>{smax}(实测:{scl})")
 
     et = (th.get("employment_type") or "").strip()
-    if et and et not in str(row.get("类型", "")) and et not in blob:
+    if et and et not in str(gf(row, colmap, "类型")) and et not in blob:
         reasons.append(f"雇佣类型不符(期望{et})")
 
     # 评分
@@ -82,12 +123,16 @@ def evaluate(row, profile):
         boost = profile.get("boost_keywords", []) or []
         hits = [k for k in boost if k and k in blob]
         score += len(hits) * 5
-        if city and city in str(row.get("城市", "")):
+        if city and city in str(gf(row, colmap, "城市")):
             score += 10
-        if floor and sal and sal >= floor:
-            score += 10
-        if sy and yrs and yrs >= sy:
-            score += 10
+        if floor and "薪资" in colmap:
+            sal = parse_salary(str(gf(row, colmap, "薪资")))
+            if sal and sal >= floor:
+                score += 10
+        if sy:
+            yrs = parse_seniority(str(gf(row, colmap, "经验要求")))
+            if yrs and yrs >= sy:
+                score += 10
     score = min(score, 100)
 
     decision = "reject" if reasons else "collect"
@@ -104,12 +149,26 @@ def main():
 
     with open(args.profile, encoding="utf-8") as f:
         profile = yaml.safe_load(f)
-    rows = list(csv.DictReader(open(args.input, encoding="utf-8-sig")))
+    reader = csv.DictReader(open(args.input, encoding="utf-8-sig"))
+    rows = list(reader)
+    colmap = build_colmap(reader.fieldnames)
+
+    # 必需列完全缺失：清晰 WARNING（stderr），而非静默全拒（C4）
+    for req in REQUIRED_FIELDS:
+        if req not in colmap:
+            sys.stderr.write(
+                f"WARNING: 必需的列缺失: {req}（候选别名 {FIELD_ALIASES[req]}）。"
+                f"该维度不参与评估，请检查 CSV 表头；其余维度照常过滤。\n"
+            )
 
     passed, rejected = [], []
     for r in rows:
-        decision, score, reasons, hits = evaluate(r, profile)
+        decision, score, reasons, hits = evaluate(r, profile, colmap)
         rec = {k: r.get(k, "") for k in r}
+        # 规范化关键字段为 canonical 名，便于下游/入库（兼容英文表头）（C4）
+        for logical in ["URL", "岗位名", "公司名", "城市", "薪资", "经验要求", "公司阶段", "公司规模", "类型"]:
+            if logical in colmap:
+                rec[logical] = r.get(colmap[logical], "")
         rec["评分"] = score
         rec["排除原因"] = "; ".join(reasons)
         rec["命中加分词"] = ",".join(hits)
@@ -157,6 +216,12 @@ def main():
         added = 0
         for p in passed:
             url = (p.get("URL", "") or "").strip()
+            if not url:
+                # C8：URL 空/缺失 -> 该行无法去重（每轮会重复入库），打印 WARNING 但不 fatal
+                sys.stderr.write(
+                    f"WARNING: 通过岗「{p.get('岗位名', p.get('title', ''))}」缺少 URL，"
+                    f"不去重（可能每轮重复入库），请补全 URL 列。\n"
+                )
             if url and url in existing_urls:
                 continue
             max_id += 1

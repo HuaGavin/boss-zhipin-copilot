@@ -27,28 +27,35 @@ function cleanText(value) {
   return decodeHtml(String(value || '')).replace(/\s+/g, ' ').trim();
 }
 
-function parseContacts(html) {
+// 用 DOM querySelector(All) + class 选择器提取（不依赖引号风格、不对 innerHTML 做正则）。
+// 选择器沿用 references/boss_selectors.md 第四节：会话条目 .chat-item / .friend-content，
+// 含 (name, company, role)。无真实 DOM 或取不到时返回 []，**绝不编造**。
+function parseContacts() {
   const items = [];
-  if (!html) return items;
-  const blocks = html.split(/<div[^>]*class=["']friend-content[^"']*["'][^>]*>/);
-  for (let i = 1; i < blocks.length; i += 1) {
-    const block = blocks[i].split('</div><div class="friend-content')[0];
-    const nameMatch = block.match(/<span class=["']name-text["']>([^<]+)<\/span>/);
-    if (!nameMatch) continue;
-    const name = cleanText(nameMatch[1]);
-    const allSpans = Array.from(block.matchAll(/<span[^>]*>([^<]+)<\/span>/g)).map((m) => cleanText(m[1]));
-    const nameIdx = allSpans.findIndex((t) => t === name);
+  // 提取在页面上下文执行时 document 可用；否则无 DOM，安全返回空。
+  if (typeof document === 'undefined' || !document) return items;
+  const nodes = document.querySelectorAll('.friend-content, .chat-item');
+  if (!nodes || nodes.length === 0) return items;
+  nodes.forEach((node) => {
+    const nameEl = node.querySelector('.name-text, .name');
+    const name = nameEl ? cleanText(nameEl.textContent) : '';
+    if (!name) return; // 跳过无名条目，不编造
+    // company / role：取 item 内其余文本 span（排除 name / 时间 / 最后消息），按出现顺序
+    const spans = Array.from(node.querySelectorAll('span'))
+      .map((s) => cleanText(s.textContent))
+      .filter((t) => t && t !== name);
+    // 在 spans 中定位 name 之后的公司 / 角色（若有）
+    const nameIdx = spans.indexOf(name);
     let company = '', role = '';
     if (nameIdx >= 0) {
-      company = allSpans[nameIdx + 1] || '';
-      role = allSpans[nameIdx + 2] || '';
+      company = spans[nameIdx + 1] || '';
+      role = spans[nameIdx + 2] || '';
+    } else if (spans.length) {
+      company = spans[0] || '';
+      role = spans[1] || '';
     }
-    const lastMsgMatch = block.match(/<span class=["']last-msg-text["']>([^<]*)<\/span>/);
-    const lastMsg = lastMsgMatch ? cleanText(lastMsgMatch[1]) : '';
-    const timeMatch = block.match(/<span class=["']message-time["']>([^<]*)<\/span>/);
-    const time = timeMatch ? cleanText(timeMatch[1]) : '';
-    items.push({ name, company, role, lastMsg, time });
-  }
+    items.push({ name, company, role });
+  });
   return items;
 }
 
@@ -93,7 +100,7 @@ export async function extract({ pageHtml, url, finalUrl, params = {}, ui }) {
     if (refreshed?.html) html = refreshed.html;
   } catch (htmlError) { /* fallback to initial pageHtml */ }
 
-  const contacts = parseContacts(html);
+  const contacts = parseContacts();
   return {
     ok: true,
     action,

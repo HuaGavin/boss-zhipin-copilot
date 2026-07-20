@@ -19,6 +19,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
+# ---- 统一授权门控（对所有后端生效，必须在 hosted 短路之前）----
+# hosted 短路需保留原始 argv，故在参数解析前先扫描 argv 是否含 --send。
+SEND_RAW=0
+for _a in "$@"; do
+  [ "$_a" = "--send" ] && SEND_RAW=1
+done
+AUTHORIZED="${AUTHORIZED:-0}"
+if [ "$SEND_RAW" -eq 1 ] && [ "$AUTHORIZED" != "1" ]; then
+  echo "FAIL_LOUD: 未授权，禁止生成/执行发送计划 (R5 每岗授权)。设置 AUTHORIZED=1 后重试。" >&2
+  exit 4
+fi
+
 # hosted 模式：不实际驱动，生成外部 Agent 步骤提示词后退出
 # （必须在参数解析前执行，以保留原始 argv 传给 bz_emit_plan）
 if backend_is_hosted; then bz_emit_plan "$@"; exit 0; fi
@@ -64,7 +76,7 @@ if [ "$BOOKMARK" -eq 1 ]; then
   [ "$SELF_MANAGED" -eq 0 ] && cooldown "${BOOKMARK_COOLDOWN:-$ACTION_INTERVAL_SECONDS}"
   WF=$(bz_ui "$TAB" wait-for --selector ".btn-interest" 2>&1) || true
   echo "$WF" | grep -qi "verify\|验证码" && { echo "FAIL_LOUD: 撞验证墙"; exit 3; }
-  bz_ui "$TAB" click --selector ".btn-interest" 2>&1
+  bz_ui "$TAB" click --selector ".btn-interest" 2>&1 || { echo "[warn] 选择器未命中(.btn-interest)，请人工核对" >&2; }
   HTML2=$(bz_browse_html "$LEASE" "$TAB" 2>&1)
   if echo "$HTML2" | grep -q "取消感兴趣"; then
     echo "[ok] 书签成功 (按钮已变 取消感兴趣)"
@@ -75,22 +87,22 @@ fi
 
 # ---- 读 JD / 招聘方（真实招聘方来自 .job-boss-info .name，非 user-nav）----
 if [ "$READJD" -eq 1 ]; then
-  "$PYTHON" - "$HTML" "$OUT_JSON" <<'PY'
-import sys, re, json
-html, out = sys.argv[1], sys.argv[2]
-def block(cls):
-    m = re.search(r'class="[^"]*' + re.escape(cls) + r'[^"]*"[^>]*>(.*?)</', html, re.S)
-    return re.sub(r'<[^>]+>', '', m.group(1)).strip() if m else ""
-data = {
-    "recruiter": block("job-boss-info"),     # 真实招聘方（.job-boss-info .name 取首行去"在线"）
-    "recruiter_name": block("name"),
-    "jd": block("job-sec-text"),             # 完整 JD
-    "company": block("sider-company"),
-    "_note": "严禁用 user-nav 当招聘方(那是登录账号本人)"
-}
-json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+  mkdir -p "$(dirname "$OUT_JSON")"
+  PARSED=$(mktemp)
+  # 用稳健的 DOM 解析（parse_job.py）替换脆弱正则；HTML 经 stdin 传入
+  "$PYTHON" "$SCRIPT_DIR/parse_job.py" --url "$URL" >"$PARSED" <<<"$HTML" \
+    || { echo "FAIL_LOUD: parse_job.py 解析 JD 失败" >&2; rm -f "$PARSED"; exit 1; }
+  # 单 dict 包成单元素列表写入（满足 audit_icebreaker.py 的「列表」契约，见 C1）
+  "$PYTHON" - "$OUT_JSON" "$PARSED" <<'PY'
+import sys, json
+out, src = sys.argv[1], sys.argv[2]
+d = json.load(open(src, encoding="utf-8"))
+if isinstance(d, dict):
+    d = [d]
+json.dump(d, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 print("OK ->", out)
 PY
+  rm -f "$PARSED"
 fi
 
 # ---- 发消息（授权门控，真实光标）----
@@ -102,11 +114,11 @@ if [ "$SEND" -eq 1 ]; then
   cooldown "${SEND_COOLDOWN:-$ACTION_INTERVAL_SECONDS}"
   WF=$(bz_ui "$TAB" wait-for --selector ".btn-chat" 2>&1) || true
   echo "$WF" | grep -qi "verify\|验证码" && { echo "FAIL_LOUD: 撞验证墙"; exit 3; }
-  bz_ui "$TAB" click --selector ".btn-chat" 2>&1
+  bz_ui "$TAB" click --selector ".btn-chat" 2>&1 || { echo "[warn] 选择器未命中(.btn-chat)，请人工核对" >&2; }
   sleep 2
-  bz_ui "$TAB" click --selector ".chat-input" 2>&1
+  bz_ui "$TAB" click --selector ".chat-input" 2>&1 || { echo "[warn] 选择器未命中(.chat-input)，请人工核对" >&2; }
   bz_ui "$TAB" type --text "$TEXT" 2>&1
-  bz_ui "$TAB" click --selector ".btn-send" 2>&1
+  bz_ui "$TAB" click --selector ".btn-send" 2>&1 || { echo "[warn] 选择器未命中(.btn-send)，请人工核对" >&2; }
   HTML3=$(bz_browse_html "$LEASE" "$TAB" 2>&1)
   if echo "$HTML3" | grep -q "$TEXT"; then
     echo "[ok] 消息已发送 (页面含该文本)"
