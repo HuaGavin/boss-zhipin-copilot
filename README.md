@@ -1,5 +1,10 @@
 # boss-zhipin-copilot
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](requirements.txt)
+[![Dependencies](https://img.shields.io/badge/deps-pyyaml-lightgrey.svg)](requirements.txt)
+[![Works with](https://img.shields.io/badge/works%20with-WorkBuddy%20%7C%20OpenClaw%20%7C%20Codex-blueviolet.svg)](https://github.com/energypantry/agent-browser-runtime)
+
 > 一个通用、可配置、开源的 **BOSS 直聘求职 copilot** skill。
 > 配合「仿真人浏览器后端」（默认 [agent-browser-runtime](https://github.com/energypantry/agent-browser-runtime)，亦支持 [OpenAI Codex](https://developers.openai.com/codex/app/chrome-extension) 托管等）的真实光标浏览器，
 > 把「简历 + 求职目标」或「一句话目标」沉淀成可复用的能力：
