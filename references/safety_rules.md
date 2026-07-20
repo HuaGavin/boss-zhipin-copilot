@@ -20,9 +20,12 @@
 
 ## R3 限速强制
 
-- 操作间间隔 ≥ `$ACTION_INTERVAL_SECONDS`（默认 5s）。
+- 操作间间隔 ≥ `$ACTION_INTERVAL_SECONDS`（默认 5s），由 `common.sh` 的 `cooldown` 实现。
 - 每日收藏 + 开聊总数 ≤ `$DAILY_CAP`（默认 100）。
-- 无限速 = 不执行。脚本内置计数，超限即停。
+- 无限速 = 不执行。**已落地实现**：`common.sh` 的 `bump_daily_cap` 在每个改状态动作
+  （`process_job.sh` 的书签 / 发送）执行前跨调用持久化计数（落盘
+  `${WORK_DIR:-.work}/.daily_action_count_YYYYMMDD`，按自然日隔离），超 `DAILY_CAP` 即 `exit 5` 停手。
+- hosted（如 codex）模式不在本地驱动，日限额靠 `bz_emit_plan` 生成的提示词以「单日勿超 100」文本约束提醒执行方。
 
 ## R4 撞墙即停
 

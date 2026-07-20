@@ -192,7 +192,8 @@ boss-zhipin-copilot/
 │   ├── target_library_schema.md  # 岗位库 CSV schema
 │   ├── boss_selectors.md         # BOSS 选择器（需实况校验）
 │   ├── safety_rules.md           # R1–R9 安全纪律
-│   └── cooldown_config.md        # 限速配置
+│   ├── cooldown_config.md        # 限速配置
+│   └── browser_backend.md        # 浏览器后端契约与兼容清单
 ├── scripts/
 │   ├── common.sh                 # 后端探测 + source backends/$BZC_BACKEND.sh + fail-loud + 撞墙/冷却
 │   ├── backends/
@@ -203,6 +204,7 @@ boss-zhipin-copilot/
 │   ├── process_job.sh            # 单岗：书签/读JD/发消息（hosted 短路到 emit_plan）
 │   ├── scan_chat.sh              # 扫描聊天列表（hosted 短路到 emit_plan）
 │   ├── zhipin-chat.extract.js    # 聊天列表提取器
+│   ├── parse_job.py              # 读JD的HTML DOM解析（process_job 内部调用）
 │   ├── build_profile.py          # 目标句→profile 草稿
 │   ├── filter_library.py         # 过滤+评分+入库
 │   └── audit_icebreaker.py       # 话术自检 gate

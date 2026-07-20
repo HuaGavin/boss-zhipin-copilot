@@ -52,3 +52,25 @@ cooldown() {
   local secs="${1:-${ACTION_INTERVAL_SECONDS:-5}}"
   sleep "$secs"
 }
+
+# ---- 日限额计数器（R3，跨调用持久化）----
+# 每个「改账号状态」动作（书签 / 发消息）执行前调用一次；超过 DAILY_CAP 即 fail-loud（exit 5）。
+# 计数落盘到 ${WORK_DIR:-.work}/.daily_action_count_YYYYMMDD，按自然日隔离，跨进程/跨调用累计。
+# 说明：这是软性节流，防止单日突发批量触发反作弊；不替代 R5 授权门控与 R4 撞墙停手。
+bump_daily_cap() {
+  local cap="${DAILY_CAP:-100}"
+  # cap<=0 视作不限（仍会记录，便于审计）
+  local dir="${WORK_DIR:-.work}"
+  mkdir -p "$dir"
+  local f="$dir/.daily_action_count_$(date +%Y%m%d)"
+  local n=0
+  [ -f "$f" ] && n=$(cat "$f" 2>/dev/null | tr -dc '0-9'); [ -z "$n" ] && n=0
+  n=$((n + 1))
+  echo "$n" > "$f"
+  if [ "$cap" -gt 0 ] && [ "$n" -gt "$cap" ]; then
+    echo "FAIL_LOUD: 已达单日动作上限 DAILY_CAP=$cap（今日第 $n 次改状态动作），停手 (R3)。" >&2
+    echo "  如需继续，请确认风险后手动调高 DAILY_CAP 或次日再跑；切勿突发批量。" >&2
+    exit 5
+  fi
+  echo "[cap] 今日改状态动作计数: $n/$cap" >&2
+}

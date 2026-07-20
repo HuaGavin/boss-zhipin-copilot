@@ -73,6 +73,7 @@ verify_wall "$HTML"
 
 # ---- 书签（点「感兴趣」）----
 if [ "$BOOKMARK" -eq 1 ]; then
+  bump_daily_cap   # R3 日限额（改状态动作）
   [ "$SELF_MANAGED" -eq 0 ] && cooldown "${BOOKMARK_COOLDOWN:-$ACTION_INTERVAL_SECONDS}"
   WF=$(bz_ui "$TAB" wait-for --selector ".btn-interest" 2>&1) || true
   echo "$WF" | grep -qi "verify\|验证码" && { echo "FAIL_LOUD: 撞验证墙"; exit 3; }
@@ -111,6 +112,7 @@ if [ "$SEND" -eq 1 ]; then
   [ -z "$MSG" ] && { echo "FAIL_LOUD: 缺少 --msg 消息文件" >&2; exit 1; }
   [ -f "$MSG" ] || { echo "FAIL_LOUD: 消息文件不存在: $MSG" >&2; exit 1; }
   TEXT=$(cat "$MSG")
+  bump_daily_cap   # R3 日限额（改状态动作）
   cooldown "${SEND_COOLDOWN:-$ACTION_INTERVAL_SECONDS}"
   WF=$(bz_ui "$TAB" wait-for --selector ".btn-chat" 2>&1) || true
   echo "$WF" | grep -qi "verify\|验证码" && { echo "FAIL_LOUD: 撞验证墙"; exit 3; }

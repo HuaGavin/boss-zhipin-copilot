@@ -33,7 +33,8 @@ bz_emit_plan() {
       --scan-chat) scan=1; shift;;
       --msg)   msg="$2"; shift 2;;
       --out|--lease|--tab|--keep) shift 2 2>/dev/null || shift;;
-      *) shift;;
+      # N7: 未知参数不再静默丢弃，打印 WARNING 便于发现拼写/契约漂移
+      *) echo "[warn] codex emit_plan 忽略未知参数: $1" >&2; shift;;
     esac
   done
 
@@ -45,6 +46,12 @@ bz_emit_plan() {
   echo ""
   [ -n "$url" ] && echo "目标岗位页: $url"
   echo ""
+  # N5: hosted 模式下「你把本提示词粘贴进 Codex 执行」这一动作本身即构成对下列改状态动作
+  #     （书签 / 发消息）的授权。若你并未打算授权，请勿粘贴。R5 授权门控在 hosted 模式以此方式落实。
+  if [ "$bookmark" -eq 1 ] || [ "$send" -eq 1 ]; then
+    echo "⚠️ 授权确认：粘贴并执行本提示词 = 你已授权以下改账号状态动作（书签/发消息）。不打算授权请勿粘贴。"
+    echo ""
+  fi
   if [ "$scan" -eq 1 ]; then
     echo "1) 打开聊天列表页（https://www.zhipin.com/web/geek/chat），滚动加载全部会话；"
     echo "   提取每条会话的（招聘方名称 / 公司 / 岗位）三元组，原样以 JSON 数组返回给我（只读，不要改动任何状态）。"
@@ -64,9 +71,10 @@ bz_emit_plan() {
     echo "   ───────────────────"
   fi
   echo ""
-  echo "安全约束（务必遵守）："
-  echo " - 遇到任何验证墙（验证码/拖动滑块/「请完成」）立即停止，不要强行通过；"
-  echo " - 每次点击/键入之间自然停顿，不要机械连点；"
+  echo "安全约束（务必遵守，等同本 skill 的 R3/R4 纪律）："
+  echo " - ⛔ 撞墙即停（R4）：遇到任何验证墙（验证码/拖动滑块/「安全验证」/「请完成」）立即停止，"
+  echo "   不要强行通过或重试；停手后账号冷却 ≥24 小时，期间仅真人使用，绝不恢复自动化。"
+  echo " - ⏱️ 限速（R3）：每次点击/键入之间自然停顿（≥5 秒），不要机械连点；单日收藏+开聊总数勿超 100。"
   echo " - 仅做上面列出的动作，不要额外浏览或改动其他状态。"
   echo ""
   echo "执行后请把页面返回的关键文本（JD 字段 / 发送确认）贴回给我，以便本 skill 入库与自检。"

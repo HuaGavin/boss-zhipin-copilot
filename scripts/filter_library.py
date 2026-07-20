@@ -27,7 +27,7 @@ FIELD_ALIASES = {
     "公司阶段": ["公司阶段", "stage", "融资阶段", "融资"],
     "公司规模": ["公司规模", "size", "规模", "人数", "员工数"],
     "类型":     ["类型", "type", "职能", "岗位类型"],
-    "URL":      ["URL", "url", "链接", "链接地址"],
+    "URL":      ["URL", "url", "链接", "链接地址", "link", "url_link"],
     "岗位名":   ["岗位名", "title", "职位", "岗位", "job_title", "jobtitle", "job name"],
     "公司名":   ["公司名", "company", "公司"],
 }
@@ -93,7 +93,9 @@ def evaluate(row, profile, colmap):
     # 仅当「薪资列存在」时才做薪资门控；列缺失已在 main 中 WARNING 且不静默全拒（C4）
     if floor and "薪资" in colmap:
         sal = parse_salary(str(gf(row, colmap, "薪资")))
-        if sal is None or sal < floor:
+        # N1: 薪资无法解析（如「面议/薪资面议」，多为高端岗）按「未知」处理，不当「低于门槛」误杀；
+        #     仅当能解析出数值且确实低于 floor 时才排除。
+        if sal is not None and sal < floor:
             reasons.append(f"薪资低于{floor}(实测:{sal})")
 
     sy = int(th.get("seniority_years", 0) or 0)
