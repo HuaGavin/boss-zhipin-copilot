@@ -40,14 +40,26 @@ def split_blocks(md):
     # N3: 组装时「显式编号优先」，避免无编号标题的位置序号与某显式编号碰撞后互相覆盖
     #     （如前置 `## 通用背景`(位置1) 不再覆盖 `## 1. 岗位A`）。无编号且撞到显式编号者视作
     #     前言/补充，不占岗位槽（消费方只按岗位正整数索引取块）。
+    # F2: 重复「显式编号」(如 `## 1. A` 与 `## 1. B`)不再静默覆盖第一块，改用 `key_dupN`
+    #     后缀保留，避免第一块话术在权威模式被丢弃致误判「未达标」。
     explicit_keys = {k for k, e, _ in items if e}
+    seen = {}
     blocks = {}
     for key, explicit, body in items:
         if not explicit and key in explicit_keys:
             continue
         if key in blocks and not explicit:
             continue
-        blocks[key] = body
+        if key in blocks:
+            # 显式编号碰撞：累计重复次数，生成不丢块的 key
+            seen[key] = seen.get(key, 0) + 1
+            new_key = f"{key}_dup{seen[key]}"
+            sys.stderr.write(
+                f"[warn] audit_icebreaker: 显式编号 {key} 重复出现，第二块存为 {new_key}（避免覆盖丢失）\n"
+            )
+            blocks[new_key] = body
+        else:
+            blocks[key] = body
     return blocks
 
 def auto_keys(jd_text, top=10):
@@ -94,7 +106,9 @@ def main():
     blocks = split_blocks(md)
 
     if keys:
-        print(f"[权威模式] keys={os.path.basename(keys_path)}  要求: JD>=90% 且 事实>=90%\n")
+        # F8: keys 的键须为 recruiter_jd.json 中每岗的 `id`（与话术块按位置序号 1..N 对齐）；
+        #     写 keys 时务必用 process_job --read-jd 产物的 id 作键，否则无法对上话术块。
+        print(f"[权威模式] keys={os.path.basename(keys_path)}（键=recruiter_jd.json 的 id）  要求: JD>=90% 且 事实>=90%\n")
         print("| # | 岗位 | JD命中 | 事实命中 | 招聘方 | 判定 |")
         print("|---|------|------|------|------|------|")
         tj = th = tf = fh = 0; fail = []

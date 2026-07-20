@@ -57,6 +57,9 @@ cooldown() {
 # 每个「改账号状态」动作（书签 / 发消息）执行前调用一次；超过 DAILY_CAP 即 fail-loud（exit 5）。
 # 计数落盘到 ${WORK_DIR:-.work}/.daily_action_count_YYYYMMDD，按自然日隔离，跨进程/跨调用累计。
 # 说明：这是软性节流，防止单日突发批量触发反作弊；不替代 R5 授权门控与 R4 撞墙停手。
+# F11: 本计数器仅在「本地后端（brs）」链路生效——process_job.sh 在 hosted 短路（backend_is_hosted）
+#      前已 exit 0，bump_daily_cap 不会被调用。hosted 模式动作发生在 Codex 端，R3 日限额**无代码级
+#      保障**，仅依赖 emit_plan 文本提示 + 执行方（人/外部 Agent）自律。文档须明示此边界。
 bump_daily_cap() {
   local cap="${DAILY_CAP:-100}"
   # cap<=0 视作不限（仍会记录，便于审计）

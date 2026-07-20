@@ -67,7 +67,9 @@ def parse_salary(s):
     return None
 
 def parse_seniority(s):
-    m = re.search(r"(\d+)\s*年", s)
+    # F1: 与 build_profile C13 对齐——限制 1-2 位数字（排除「2026年校招」这类 4 位年份误取为年限）
+    m = re.search(r"(?<!\d)(\d{1,2})\s*年以上", s) \
+        or re.search(r"(?<!\d)(\d{1,2})\s*年(?![\d])", s)
     return int(m.group(1)) if m else None
 
 def parse_scale(s):
@@ -91,6 +93,7 @@ def evaluate(row, profile, colmap):
 
     floor = int(th.get("salary_floor", 0) or 0)
     # 仅当「薪资列存在」时才做薪资门控；列缺失已在 main 中 WARNING 且不静默全拒（C4）
+    sal = None
     if floor and "薪资" in colmap:
         sal = parse_salary(str(gf(row, colmap, "薪资")))
         # N1: 薪资无法解析（如「面议/薪资面议」，多为高端岗）按「未知」处理，不当「低于门槛」误杀；
@@ -99,6 +102,7 @@ def evaluate(row, profile, colmap):
             reasons.append(f"薪资低于{floor}(实测:{sal})")
 
     sy = int(th.get("seniority_years", 0) or 0)
+    yrs = None
     if sy:
         yrs = parse_seniority(str(gf(row, colmap, "经验要求")))
         if yrs is None or yrs < sy:
@@ -128,11 +132,11 @@ def evaluate(row, profile, colmap):
         if city and city in str(gf(row, colmap, "城市")):
             score += 10
         if floor and "薪资" in colmap:
-            sal = parse_salary(str(gf(row, colmap, "薪资")))
+            # F3: 复用门控已解析的 sal（不再重复 parse_salary）
             if sal and sal >= floor:
                 score += 10
         if sy:
-            yrs = parse_seniority(str(gf(row, colmap, "经验要求")))
+            # F3: 复用门控已解析的 yrs（不再重复 parse_seniority）
             if yrs and yrs >= sy:
                 score += 10
     score = min(score, 100)

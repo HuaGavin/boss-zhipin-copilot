@@ -17,26 +17,30 @@
 #   - 选择器见 references/boss_selectors.md（待校准项首次须复核）
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
 
-# ---- 统一授权门控（对所有后端生效，必须在 hosted 短路之前）----
-# hosted 短路需保留原始 argv，故在参数解析前先扫描 argv 是否含 --send。
-SEND_RAW=0
+# ---- 统一授权门控（最早执行，必须在 source common.sh / 加载后端之前）----
+# F9/F10: 书签与发送均属「改账号状态动作」，需 AUTHORIZED=1 才放行。提到最前可保证
+# 本地 brs（后端加载即探测 brs.js）与 hosted codex 在未授权时**统一 exit 4**，
+# 不会因后端缺失先报 exit 1 而掩盖授权语义。
+SEND_RAW=0; BOOKMARK_RAW=0
 for _a in "$@"; do
   [ "$_a" = "--send" ] && SEND_RAW=1
+  [ "$_a" = "--bookmark" ] && BOOKMARK_RAW=1
 done
 AUTHORIZED="${AUTHORIZED:-0}"
-if [ "$SEND_RAW" -eq 1 ] && [ "$AUTHORIZED" != "1" ]; then
-  echo "FAIL_LOUD: 未授权，禁止生成/执行发送计划 (R5 每岗授权)。设置 AUTHORIZED=1 后重试。" >&2
+if { [ "$SEND_RAW" -eq 1 ] || [ "$BOOKMARK_RAW" -eq 1 ]; } && [ "$AUTHORIZED" != "1" ]; then
+  echo "FAIL_LOUD: 未授权，禁止生成/执行书签或发送计划 (R5 每岗授权)。设置 AUTHORIZED=1 后重试。" >&2
   exit 4
 fi
+
+source "$SCRIPT_DIR/common.sh"
 
 # hosted 模式：不实际驱动，生成外部 Agent 步骤提示词后退出
 # （必须在参数解析前执行，以保留原始 argv 传给 bz_emit_plan）
 if backend_is_hosted; then bz_emit_plan "$@"; exit 0; fi
 
 BOOKMARK=0; READJD=0; SEND=0; KEEP=0
-URL=""; LEASE=""; TAB=""; OUT_JSON="${WORK_DIR:-.work}/jd_read.json"; MSG=""
+URL=""; LEASE=""; TAB=""; OUT_JSON="${WORK_DIR:-.work}/recruiter_jd.json"; MSG=""
 SELF_MANAGED=1
 
 while [ $# -gt 0 ]; do

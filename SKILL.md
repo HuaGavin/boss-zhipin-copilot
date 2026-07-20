@@ -51,8 +51,8 @@ description: >-
 - **R3** 限速强制：动作间隔 ≥`ACTION_INTERVAL_SECONDS`(5s)，每日收藏+开聊 ≤`DAILY_CAP`(100)。
 - **R4** 撞墙即停：验证码/滑块 → 停手交人工，冷却 ≥24h，绝不恢复自动化（`exit 3`）。
 - **R5** 授权门控：书签需批次授权；发消息需**每岗** `AUTHORIZED=1`。
-  **门控对两种后端一致**：本地 `brs` 与托管 `codex`（hosted）的真实光标发送**都**必须 `AUTHORIZED=1`。
-  > ⚠️ hosted 模式**未授权时绝不 emit 任何「发送」计划**——`bz_emit_plan` 在遇到发送动作且 `AUTHORIZED≠1` 时只产出浏览/读 JD/本地成稿步骤，绝不生成发送步骤（等价于 `exit 4` 拒绝）。
+  **门控对两种后端一致**：本地 `brs` 与托管 `codex`（hosted）的书签/发送**都**必须 `AUTHORIZED=1`。
+  > ⚠️ 授权门控在 `process_job.sh` 顶部统一执行，**早于** hosted 短路：未授权（`AUTHORIZED≠1`）时带 `--send` 或 `--bookmark` 直接 `exit 4` 拒绝，**根本不会调用 `bz_emit_plan`**（F10 已对齐书签与发送同门控）。`bz_emit_plan` 本身不含授权判断，只负责把已通过门控的动作翻译成可粘贴步骤。
 - **R6** 合并打开、避免无谓重开（同次任务合并书签+读JD+授权发送）。
 - **R7** 预飞 1 岗跑通整条路径，再复制其余。
 - **R8** 单 lease 连续 tab，批量不杀重启（burst）。

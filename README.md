@@ -149,6 +149,8 @@ AUTHORIZED=1 bash scripts/process_job.sh --url <岗位URL> --send --msg 话术.t
 `profile.yaml` 是整个 skill 的唯一输入契约。结构（完整说明见 `references/profile_schema.md`）：
 
 ```yaml
+meta:                       # 可选：候选人标识（可空，不写也行）
+  candidate_name: "你的名字"
 search:
   city: "北京"
   queries: ["策略产品经理 北京"]
