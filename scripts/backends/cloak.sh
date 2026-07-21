@@ -28,6 +28,7 @@ bz_status() {
 
 bz_browse_start() { bz_status; }
 bz_browse_html()  { bz_status; }
+bz_browse_nav()   { bz_status; }
 bz_browse_end()   { bz_status; }
 bz_ui()           { bz_status; }
 bz_extract()      { bz_status; }

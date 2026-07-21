@@ -1,7 +1,7 @@
 ---
 name: boss-zhipin-copilot
 description: >-
-  通用 BOSS 直聘求职 copilot：配合仿真人浏览器后端用真实光标安全检索/收藏岗位、读 JD、写破冰话术并按授权发送。强制走后端正门、真实光标、限速、撞墙停手、授权门控，绝不裸 CDP。
+  通用 BOSS 直聘求职 copilot：配合仿真人浏览器后端用真实光标安全检索/收藏岗位、读 JD、写破冰话术并按授权发送。强制走后端正门、真实光标、限速、撞墙停手、授权门控，绝不裸 CDP。禁止现写等价脚本——内置任务一律复用 scripts/，新建前必查 references/script_catalog.md。
 ---
 
 通用、可配置、开源的 BOSS 直聘求职 copilot：把「简历 + 求职目标」沉淀为可复用能力——自动建岗位画像与检索词、建评分机制、建岗位库、检索收藏、写破冰话术、按授权发送。
@@ -9,6 +9,8 @@ description: >-
 > 🔌 **应用层架构**：浏览器运行时由「仿真人浏览器后端」经 `bz_*` 契约即插即用提供。默认 [agent-browser-runtime](https://github.com/energypantry/agent-browser-runtime)（真实光标）；亦支持 [Codex](https://developers.openai.com/codex/app/chrome-extension) 托管（生成可粘贴提示词）。**所有浏览器动作只经后端正门真实光标执行，绝不直连 CDP。**
 
 **流水线**：`简历/目标` → `profile.yaml` → 检索·过滤·入库 → 读 JD → 写话术（自检 gate）→ 授权发送 / 仅本地成稿
+
+> 🛑 **最高优先级前置门控**：任何 `Write`/创建 `.sh`/`.py` 动作前，**必须先 `Read references/script_catalog.md`**。表中已有对应任务时现写即违规——立即停用，改用内置。复用优先于一切。
 
 ---
 
@@ -42,23 +44,40 @@ description: >-
 
 ---
 
+## 🛑 脚本复用铁律（Reuse-First，最高优先级）
+
+> 本 skill 预建了全套脚本，**目的就是让 Agent 不再每次任务现写脚本**（那是误差与低效之源）。
+> 动手写任何新脚本前，先查 **`references/script_catalog.md`**（任务 → 内置脚本精确命令映射）。
+
+- **① 复用优先**：凡 `script_catalog.md` 有对应内置脚本，必须直接 `bash`/`python3` 复用，**禁止重写等价脚本**。反模式：重写 `search_jobs.sh`（多词检索）/ `parse_search.py`（卡片解析）/ `read_jd_batch.py`（批量读JD）/ `filter_candidates.py`（去重·过滤·打分）——全部已内置，复用即可。
+- **② 只读 / 批量正确姿势**：
+  - 检索收集 → `search_jobs.sh`（走 `bz_*` 契约、复用同 tab、只读产 `candidates.csv`）。
+  - 过滤打分去重（不动账号）→ `filter_library.py` **省略 `--library`**（只产 `eval.json`）；Top-N 自行按「评分」截断。
+  - 批量读 JD → **shell 循环 `process_job.sh --read-jd`**（复用真实光标+撞墙检查+`parse_job.py`），禁另写批量脚本。
+- **③ 复用发现问题**（逃逸规则）：优先**就地改**现有脚本（惠及所有未来运行）；确属全新需求才**新建**，且必须收编进 `scripts/` + 登记 `script_catalog.md`，**未来一律复用，禁止每次重造**。
+
 ## 工作流
 ### Step 0 · 生成 / 校验 profile
-`python3 scripts/build_profile.py --goal "..." [--resume 简历.md] --out profile.yaml` 抽草稿；Agent 复核补全 `hard_exclude` / `boost_keywords` / `fact_anchors`（依据 `references/profile_schema.md`）。解析不出的维度保守留空（=不限），必要时追问 1 个关键问题。→ **产物 `profile.yaml`**（后续唯一输入）。
+`python3 scripts/build_profile.py --goal "..." [--resume 简历.md] --out profile.yaml` 抽草稿；Agent 复核补全 `hard_exclude` / `boost_keywords` / `fact_anchors`（依据 `references/profile_schema.md`）。解析不出的维度保守留空（=不限），必要时追问 1 个关键问题。→ **产物 `profile.yaml`**（后续唯一输入）。（复用 `build_profile.py`，禁现写等价脚本）
 
 ### Step 1 · 建 / 校验岗位库
-`bash scripts/setup_library.sh` 生成空 `target_library.csv`（`$LIB_CSV` 可指定）。本库是检索/去重/入库的**唯一权威数据源**（`references/target_library_schema.md`）。
+`bash scripts/setup_library.sh` 生成空 `target_library.csv`（`$LIB_CSV` 可指定）。本库是检索/去重/入库的**唯一权威数据源**（`references/target_library_schema.md`）。（复用 `setup_library.sh`，禁现写）
 
 ### Step 2 · 检索 → 过滤 → 书签入库
-1. 真实 UI 在 BOSS 搜索框键入 `profile.search.queries` 每个词（`bz_ui ... type` + 回车，**禁止** `?query=&city=&page=` 捷径）。
-2. 收集结果卡 → 写「待评估 CSV」（列：岗位名/公司名/城市/薪资/经验要求/公司阶段/规模/类型/URL）。
-3. `python3 scripts/filter_library.py --profile profile.yaml --input 待评估.csv --library target_library.csv --out eval.json` → 硬排除+门槛+评分，通过项追加进库（状态=已收藏(感兴趣)）。
-4. 逐岗书签：`bash scripts/process_job.sh --url <岗URL> --bookmark`（复用 lease：`--lease <id> --tab <id>`）。
-5. 预飞 1 岗跑通选择器 → 同路径复用；按 `references/cooldown_config.md` 间隔；撞墙即停。
+1. **检索收集**（复用内置，禁自写）：`bash scripts/search_jobs.sh --profile profile.yaml --out .work/candidates.csv`
+   - 查询词取自 `profile.search.queries`（或 `--queries "词1,词2"`）；走 `bz_*` 真实光标、复用同 tab、**禁 `?query=&city=&page=` 捷径**。
+   - 产 `candidates.csv`（列：岗位名/公司名/城市/经验要求/URL）。⚠️ **无薪资列**——卡片薪资被字体反爬混淆，须 Step 3 从 JD 详情页取。
+2. **过滤打分去重**（复用 `filter_library.py`，禁现写）：`python3 scripts/filter_library.py --profile profile.yaml --input .work/candidates.csv --out .work/eval.json`
+   - **省略 `--library` = 只读候选清单、不入库**；通过项在 `eval.json.passed`，Top-N 自行按「评分」截断。
+   - 确需入库再加 `--library target_library.csv`（通过项追加，状态=已收藏(感兴趣)，按 URL 去重）。
+3. 逐岗书签：`AUTHORIZED=1 bash scripts/process_job.sh --url <岗URL> --bookmark`（复用 lease：`--lease <id> --tab <id>`）。
+4. 预飞 1 岗跑通选择器 → 同路径复用；按 `references/cooldown_config.md` 间隔；撞墙即停。
 
 ### Step 3 · 读 JD / 招聘方
-`bash scripts/process_job.sh --url <岗URL> --read-jd --out recruiter_jd.json` → 解析 `.job-boss-info .name`（真实招聘方，**非登录账号**）/ `.job-sec-text`（完整 JD）/ `.sider-company`。
-**输出契约**：`recruiter_jd.json` 为 **JSON 列表** `[{id,title,jd,recruiter,company}]`（批量含多元素）；兼容单 dict。此为话术**唯一 JD 依据**。
+单岗：`bash scripts/process_job.sh --url <岗URL> --read-jd --out recruiter_jd.json` → 解析 `.job-boss-info .name`（真实招聘方，**非登录账号**）/ `.job-sec-text`（完整 JD）/ `.sider-company`。
+**批量（N 岗）禁止另写 `read_jd_batch.py`** → shell 循环复用单岗命令（白赚真实光标 + 撞墙检查 + 解析）：
+`for u in $(cat urls.txt); do bash scripts/process_job.sh --url "$u" --read-jd --out .work/jd_$((++n)).json; done`
+**输出契约**：每岗产出单元素 JSON 列表 `[{id,title,jd,recruiter,company}]`；合并为批量数组即话术**唯一 JD 依据**（见 `audit_icebreaker.py` 用法）。
 
 ### Step 4 · 写破冰话术（通用）
 1. **JD 洞察**：1–2 句复述具体业务点，含 ≥3 个 JD 原文 distinctive 词。
@@ -72,7 +91,7 @@ description: >-
 - 未授权 → 仅产出本地文档（如 `破冰沟通YYYYMMDD.md`），**不发送**。
 
 ### Step 6 · 扫描聊天列表（可选）
-`bash scripts/scan_chat.sh` 调 `zhipin-chat.extract.js` 取快照，与 `target_library.csv` 按 (name,company,role) 交叉比对，判已发/去重。**只读，不改状态**。
+`bash scripts/scan_chat.sh` 调 `zhipin-chat.extract.js` 取快照，与 `target_library.csv` 按 (name,company,role) 交叉比对，判已发/去重。**只读，不改状态**。（复用，禁现写）
 
 ---
 
@@ -84,6 +103,8 @@ description: >-
 | `scripts/backends/codex.sh` | 托管后端：Codex Chrome 扩展（hosted，生成 @Chrome 提示词） |
 | `scripts/backends/cloak.sh` | 候选后端：CloakBrowser（骨架，待实现，勿用） |
 | `scripts/setup_library.sh` | 初始化空岗位库 CSV |
+| `scripts/search_jobs.sh` | 多词检索：复用同 tab、只读收集结果卡 → `candidates.csv`（hosted 短路 emit_plan） |
+| `scripts/parse_search.py` | 搜索结果卡片解析（search_jobs 内部调用；不含薪资） |
 | `scripts/process_job.sh` | 单岗：书签/读JD/发消息（可复用 lease；hosted 短路到 emit_plan） |
 | `scripts/scan_chat.sh` | 扫描聊天列表（hosted 短路到 emit_plan） |
 | `scripts/zhipin-chat.extract.js` | 聊天列表提取器（broker 端执行） |
@@ -91,6 +112,8 @@ description: >-
 | `scripts/filter_library.py` | profile 驱动过滤 + 评分 + 入库 |
 | `scripts/audit_icebreaker.py` | 破冰话术自检 gate（JD≥90% + 事实≥90%） |
 | `scripts/parse_job.py` | 读JD 的 HTML DOM 解析（process_job 内部调用） |
+
+> 📌 **复用前必查 `references/script_catalog.md`**：任务 → 内置脚本精确命令映射 + 反模式清单。凡表中有脚本必须复用，禁止重写（见上方「🛑 脚本复用铁律」）。
 
 ---
 

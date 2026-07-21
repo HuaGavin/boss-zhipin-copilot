@@ -45,6 +45,7 @@ def split_blocks(md):
     explicit_keys = {k for k, e, _ in items if e}
     seen = {}
     blocks = {}
+    order = []  # 文档顺序（含 dup 块），供权威/兜底按位对齐，杜绝孤儿块
     for key, explicit, body in items:
         if not explicit and key in explicit_keys:
             continue
@@ -58,9 +59,11 @@ def split_blocks(md):
                 f"[warn] audit_icebreaker: 显式编号 {key} 重复出现，第二块存为 {new_key}（避免覆盖丢失）\n"
             )
             blocks[new_key] = body
+            order.append(body)
         else:
             blocks[key] = body
-    return blocks
+            order.append(body)
+    return blocks, order
 
 def auto_keys(jd_text, top=10):
     toks = re.findall(r'[A-Za-z]{2,}|[\u4e00-\u9fa5]{3,}', jd_text or "")
@@ -103,7 +106,7 @@ def main():
         cand = os.path.join(os.path.dirname(os.path.abspath(__file__)), "audit_keys.json")
         keys_path = cand if os.path.exists(cand) else ""
     keys = json.load(open(keys_path, encoding="utf-8")) if keys_path else None
-    blocks = split_blocks(md)
+    blocks, order = split_blocks(md)
 
     if keys:
         # F8: keys 的键须为 recruiter_jd.json 中每岗的 `id`（与话术块按位置序号 1..N 对齐）；
@@ -113,7 +116,7 @@ def main():
         print("|---|------|------|------|------|------|")
         tj = th = tf = fh = 0; fail = []
         for i, x in enumerate(jd, 1):
-            blk = blocks.get(i, ""); pid = x.get("id", "")
+            blk = order[i - 1] if i - 1 < len(order) else ""; pid = x.get("id", "")
             k = keys.get(pid, {})
             jk = k.get("jd", []); fk = k.get("fact", [])
             jh = [w for w in jk if w.lower() in blk.lower()]
@@ -136,7 +139,7 @@ def main():
         fcomps, fnums = fact_entities(fact_md) if fact_md else (set(), set())
         blank = []
         for i, x in enumerate(jd, 1):
-            blk = blocks.get(i, "")
+            blk = order[i - 1] if i - 1 < len(order) else ""
             keys_ = auto_keys(x.get("jd", ""))
             jh = [k for k in keys_ if k.lower() in blk.lower()]
             fhit = [c for c in fcomps if c and c in blk] + [n for n in fnums if n in blk]

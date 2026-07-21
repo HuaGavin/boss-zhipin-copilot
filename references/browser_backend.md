@@ -19,6 +19,7 @@
 | `bz_status` | 无 | 运行时就绪闸门。不就绪则 fail-loud（exit≠0）。`hosted` 模式可只打印提示并正常退出 | ✅ |
 | `bz_browse_start` | `<url> [humanize]` | 打开目标页、占用一个租约/标签页；**导出全局变量 `BZ_LEASE` / `BZ_TAB`**（调用方不再解析 stdout）；同时把原始 JSON 打到 stdout | ✅ |
 | `bz_browse_html` | `<lease> <tab>` | 打印当前页 HTML 到 stdout（用于解析 JD / 招聘方 / 撞墙检查） | ✅ |
+| `bz_browse_nav` | `<lease> <tab> <url>` | 复用同一 lease/tab 导航到新 URL（不重开 tab，落实「禁频繁开关」；检索多词复用） | ✅ |
 | `bz_browse_end` | `<lease>` | 释放租约/关闭标签页 | ✅ |
 | `bz_ui` | `<tab> <subcommand...>` | 真实光标 UI 原语：`wait-for --selector` / `click --selector` / `type --text` / `scroll` / `move`。**必须用真实光标，禁止合成点击** | ✅ |
 | `bz_extract` | `<jsfile> <lease> <tab> <params-json>` | 运行页面内提取器（聊天列表扫描等），结果打印到 stdout | 条件（scan_chat 需要） |
@@ -47,7 +48,7 @@
 
 > ⚠️ **`cloak` 后端当前为「骨架（skeleton only），未实现驱动」**：`scripts/backends/cloak.sh` 仅做了 API 映射占位，
 > 并未实现任何 `bz_*` 契约函数。任何动作都会 **fail-loud**（不要设置 `BZC_BACKEND=cloak`）。
-> 若要实现，应在 `scripts/backends/cloak.sh` 中补齐第一节的全部「必须」函数（`bz_mode` / `bz_status` / `bz_browse_start` / `bz_browse_html` / `bz_browse_end` / `bz_ui` / `bz_extract`），
+> 若要实现，应在 `scripts/backends/cloak.sh` 中补齐第一节的全部「必须」函数（`bz_mode` / `bz_status` / `bz_browse_start` / `bz_browse_html` / `bz_browse_nav` / `bz_browse_end` / `bz_ui` / `bz_extract`），
 > 并保证 `bz_status` 能真正探测隐身 Chromium 光标已就绪，否则宁可 fail-loud 也不要盲跑。
 
 ---

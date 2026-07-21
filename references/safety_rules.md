@@ -25,7 +25,7 @@
 - 无限速 = 不执行。**已落地实现**：`common.sh` 的 `bump_daily_cap` 在每个改状态动作
   （`process_job.sh` 的书签 / 发送）执行前跨调用持久化计数（落盘
   `${WORK_DIR:-.work}/.daily_action_count_YYYYMMDD`，按自然日隔离），超 `DAILY_CAP` 即 `exit 5` 停手。
-- hosted（如 codex）模式不在本地驱动，日限额靠 `bz_emit_plan` 生成的提示词以「单日勿超 100」文本约束提醒执行方。
+- ⚠️ **hosted（如 codex）边界（F11）**：此模式浏览器由 Codex 端驱动，**本地代码层无法计数 / 强制日限额**，R3 限速仅以 `bz_emit_plan` 提示词「单日勿超 100」**文本提醒，无代码兜底**。**执行方须自律**，切勿误以为「已限速」而批量突发。
 
 ## R4 撞墙即停
 

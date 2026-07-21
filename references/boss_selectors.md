@@ -45,14 +45,20 @@
 
 ---
 
-## 五、搜索框（待校准）
+## 五、搜索框 + 结果卡片（Step 2 检索，search_jobs.sh / parse_search.py）
 
-| 用途 | 选择器（待校验） | 备注 |
+| 用途 | 选择器 | 备注 |
 |---|---|---|
-| 搜索输入 | `.search-input` / `input[type=search]` | 真实光标点击 → `ui type` 查询词 → 回车/点搜索 |
-| 搜索按钮 | `.search-btn` / `button[type=submit]` | 兜底点击 |
+| 岗位搜索页 | `https://www.zhipin.com/web/geek/job` | 复用同 tab 导航到此再检索 |
+| 搜索输入 | `.search-input-box .input` | 真实光标点击 → `ui type` 查询词 |
+| 搜索按钮 | `.search-btn` | 提交检索 |
+| 岗位名 + 链接 | `a.job-name`（`href`） | href 形如 `/job_detail/XXX.html` |
+| 公司名 | `.boss-name` | |
+| 城市 | `.company-location` | 如「北京·朝阳区」 |
+| 经验/学历 | `.tag-list li` | 限定卡内，防跨卡串扰 |
+| 薪资 | `.job-salary` | ⚠️ 字体反爬混淆，**禁读**，须从 JD 详情页取 |
 
-> skill 强制**真实 UI 搜索**（键入 + 回车），禁止拼接 `?query=&city=&page=` 捷径 URL。
+> skill 强制**真实 UI 搜索**（键入 + 点搜索），禁止拼接 `?query=&city=&page=` 捷径 URL。
 
 ---
 

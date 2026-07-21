@@ -16,6 +16,7 @@ bz_status() {
 # hosted 模式不需要真实驱动函数，调用即提示走 emit_plan
 bz_browse_start() { bz_emit_plan "$@"; }
 bz_browse_html()  { bz_emit_plan "$@"; }
+bz_browse_nav()   { bz_emit_plan "$@"; }
 bz_browse_end()   { bz_emit_plan "$@"; }
 bz_ui()           { bz_emit_plan "$@"; }
 bz_extract()      { bz_emit_plan "$@"; }
@@ -23,7 +24,7 @@ bz_extract()      { bz_emit_plan "$@"; }
 # 把一次 job 的 argv 翻译成 Codex @Chrome 提示词
 # 入参即驱动脚本的原始 argv（如 process_job.sh 的 --url ... --bookmark --send --msg f）
 bz_emit_plan() {
-  local url="" bookmark=0 readjd=0 send=0 scan=0 msg=""
+  local url="" bookmark=0 readjd=0 send=0 scan=0 search=0 queries="" msg=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --url)   url="$2"; shift 2;;
@@ -31,6 +32,7 @@ bz_emit_plan() {
       --read-jd)  readjd=1; shift;;
       --send)  send=1; shift;;
       --scan-chat) scan=1; shift;;
+      --search-queries) search=1; queries="$2"; shift 2;;
       --msg)   msg="$2"; shift 2;;
       --out|--lease|--tab|--keep) shift 2 2>/dev/null || shift;;
       # N7: 未知参数不再静默丢弃，打印 WARNING 便于发现拼写/契约漂移
@@ -51,6 +53,12 @@ bz_emit_plan() {
   if [ "$bookmark" -eq 1 ] || [ "$send" -eq 1 ]; then
     echo "⚠️ 授权确认：粘贴并执行本提示词 = 你已授权以下改账号状态动作（书签/发消息）。不打算授权请勿粘贴。"
     echo ""
+  fi
+  if [ "$search" -eq 1 ]; then
+    echo "1) 打开岗位搜索页（https://www.zhipin.com/web/geek/job），对下列每个关键词："
+    echo "   $queries"
+    echo "   在搜索框（.search-input-box .input）真实键入该词并回车（.search-btn），滚动加载数屏；"
+    echo "   提取每张结果卡的（岗位名 / 公司 / 城市 / 岗位链接）返回给我（只读，不要点开、不收藏；薪资卡片被反爬混淆勿读）。"
   fi
   if [ "$scan" -eq 1 ]; then
     echo "1) 打开聊天列表页（https://www.zhipin.com/web/geek/chat），滚动加载全部会话；"

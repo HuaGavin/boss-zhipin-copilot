@@ -72,6 +72,12 @@ bz_browse_html() {
   brs browse-html "$lease" "$tab" 2>&1
 }
 
+# 复用同一 lease/tab 导航到新 URL（不重开 tab，落实「禁止频繁开关 tab」）
+bz_browse_nav() {
+  local lease="$1" tab="$2" url="$3"
+  brs browse-nav "$lease" "$tab" "$url" 2>&1
+}
+
 bz_browse_end() {
   local lease="$1"
   brs browse-end "$lease" >/dev/null 2>&1 || true
