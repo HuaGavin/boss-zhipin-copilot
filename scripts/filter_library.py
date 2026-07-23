@@ -80,8 +80,17 @@ def evaluate(row, profile, colmap):
     reasons = []
     blob = " ".join(str(v) for v in row.values())
 
-    # 硬排除
+    # 硬排除（容错：schema 要求 {category,keywords[]}；若遇字符串条目，按「类别：JD含 k1/k2」尽力解析，
+    # 解析不出关键词则跳过并不 crash——曾因 profile 手写为字符串列表导致 AttributeError 全量崩溃）
     for cat in profile.get("hard_exclude", []) or []:
+        if isinstance(cat, str):
+            part = re.split(r"[:：]", cat, maxsplit=1)
+            label = part[0].strip()
+            kws = []
+            if len(part) > 1:
+                tail = re.sub(r"^\s*JD含\s*", "", part[1].strip())
+                kws = [k.strip() for k in re.split(r"[/、,，;；]", tail) if k.strip()]
+            cat = {"category": label, "keywords": kws}
         hits = [k for k in (cat.get("keywords", []) or []) if k and k in blob]
         if hits:
             reasons.append(f"硬排除[{cat.get('category','')}]:{','.join(hits)}")
@@ -105,11 +114,14 @@ def evaluate(row, profile, colmap):
     yrs = None
     if sy:
         yrs = parse_seniority(str(gf(row, colmap, "经验要求")))
-        if yrs is None or yrs < sy:
+        # 未知（列缺失/解析不出）≠ 不达标：跳过该维度，不误杀（与薪资 N1 同理）
+        if yrs is not None and yrs < sy:
             reasons.append(f"经验不足{sy}年(实测:{yrs})")
 
     allow = th.get("stage_allow", []) or []
-    if allow and str(gf(row, colmap, "公司阶段")).strip() not in allow:
+    stage_val = str(gf(row, colmap, "公司阶段")).strip()
+    # 阶段未知（搜索卡片无此字段）≠ 违规：跳过该维度，待读 JD 详情页后再判
+    if allow and stage_val and stage_val not in allow:
         reasons.append(f"阶段不在白名单{allow}")
 
     smax = int(th.get("scale_max", 0) or 0)

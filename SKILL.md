@@ -1,7 +1,7 @@
 ---
 name: boss-zhipin-copilot
 description: >-
-  通用 BOSS 直聘求职 copilot：配合仿真人浏览器后端用真实光标安全检索/收藏岗位、读 JD、写破冰话术并按授权发送。强制走后端正门、真实光标、限速、撞墙停手、授权门控，绝不裸 CDP。禁止现写等价脚本——内置任务一律复用 scripts/，新建前必查 references/script_catalog.md。
+  通用 BOSS 直聘求职 copilot：配合仿真人浏览器后端用真实光标安全检索/收藏岗位、读 JD、写破冰话术并按授权发送。强制走后端正门、真实光标、限速、撞墙停手、授权门控，绝不裸 CDP。四类资产（脚本/选择器/页面/点位）一律优先复用 skill 内置，禁止现写等价脚本或重猜选择器；新建前必查 script_catalog.md + boss_selectors.md。
 ---
 
 通用、可配置、开源的 BOSS 直聘求职 copilot：把「简历 + 求职目标」沉淀为可复用能力——自动建岗位画像与检索词、建评分机制、建岗位库、检索收藏、写破冰话术、按授权发送。
@@ -10,7 +10,7 @@ description: >-
 
 **流水线**：`简历/目标` → `profile.yaml` → 检索·过滤·入库 → 读 JD → 写话术（自检 gate）→ 授权发送 / 仅本地成稿
 
-> 🛑 **最高优先级前置门控**：任何 `Write`/创建 `.sh`/`.py` 动作前，**必须先 `Read references/script_catalog.md`**。表中已有对应任务时现写即违规——立即停用，改用内置。复用优先于一切。
+> 🛑 **最高优先级前置门控**：任何写脚本 / 猜选择器·页面·点位前，**必须先 `Read references/script_catalog.md` + `references/boss_selectors.md`**（统一原则见下方「🛑 优先复用与增量更新」）。已有对应项时现写即违规——立即停用，改用内置。复用优先于一切。
 
 ---
 
@@ -44,17 +44,19 @@ description: >-
 
 ---
 
-## 🛑 脚本复用铁律（Reuse-First，最高优先级）
+## 🛑 优先复用与增量更新（Reuse-First & Incremental Update · 最高优先级）
 
-> 本 skill 预建了全套脚本，**目的就是让 Agent 不再每次任务现写脚本**（那是误差与低效之源）。
-> 动手写任何新脚本前，先查 **`references/script_catalog.md`**（任务 → 内置脚本精确命令映射）。
+> 本 skill 预建了全部资产（**脚本 / 选择器 / 页面 / 点位**），目的就是让 Agent 不再现写或盲猜——那既是误差之源也是低效之源。四类资产统一遵循同一原则：
 
-- **① 复用优先**：凡 `script_catalog.md` 有对应内置脚本，必须直接 `bash`/`python3` 复用，**禁止重写等价脚本**。反模式：重写 `search_jobs.sh`（多词检索）/ `parse_search.py`（卡片解析）/ `read_jd_batch.py`（批量读JD）/ `filter_candidates.py`（去重·过滤·打分）——全部已内置，复用即可。
-- **② 只读 / 批量正确姿势**：
-  - 检索收集 → `search_jobs.sh`（走 `bz_*` 契约、复用同 tab、只读产 `candidates.csv`）。
-  - 过滤打分去重（不动账号）→ `filter_library.py` **省略 `--library`**（只产 `eval.json`）；Top-N 自行按「评分」截断。
-  - 批量读 JD → **shell 循环 `process_job.sh --read-jd`**（复用真实光标+撞墙检查+`parse_job.py`），禁另写批量脚本。
-- **③ 复用发现问题**（逃逸规则）：优先**就地改**现有脚本（惠及所有未来运行）；确属全新需求才**新建**，且必须收编进 `scripts/` + 登记 `script_catalog.md`，**未来一律复用，禁止每次重造**。
+- **① 复用优先**：动手前先查已有资产——
+  - 脚本 → `references/script_catalog.md`（任务 → 内置命令精确映射）
+  - 选择器 / 页面 / 点位 → `references/boss_selectors.md`
+  - 凡已有对应条目，**必须直接复用**：禁止重写等价脚本、禁止重猜选择器、禁止盲试页面 URL、禁止自造点位。
+- **② 发现错误 → 就地更新**：已有条目实测漂移 / 失效，**直接改对应条目**（fix-in-place）惠及所有未来运行；**禁止绕过**（绕过 = 误触 / 误判，见 R1）。
+- **③ 发现新内容 → 补进对应位置**：
+  - 新脚本 → 收编 `scripts/` + 登记 `script_catalog.md`
+  - 新选择器 / 页面 / 点位 → 补进 `boss_selectors.md` 对应节（标注「首次校验」）
+- **④ 受控逃逸阀**：仅当确属全新、与现有资产无重叠才新建；新建必登记；**无法说清「为何现有不适用」时，默认就地改，不得新建**。任务执行中**禁止临时改写 `process_job.sh` 等内置脚本绕过门控**——源码修改走 skill 维护流程（改后 commit）。
 
 ## 工作流
 ### Step 0 · 生成 / 校验 profile
@@ -71,10 +73,11 @@ description: >-
    - **省略 `--library` = 只读候选清单、不入库**；通过项在 `eval.json.passed`，Top-N 自行按「评分」截断。
    - 确需入库再加 `--library target_library.csv`（通过项追加，状态=已收藏(感兴趣)，按 URL 去重）。
 3. 逐岗书签：`AUTHORIZED=1 bash scripts/process_job.sh --url <岗URL> --bookmark`（复用 lease：`--lease <id> --tab <id>`）。
+   - 核对实际收藏：个人中心「感兴趣」tab（`https://www.zhipin.com/web/geek/recommend`，见 `boss_selectors.md` 六，**只读**，勿在此页改状态）。列表页**每卡另有 `a.btn-startchat` 可直接开聊**，卡片 DOM 结构见 `boss_selectors.md` 六「收藏列表卡片 DOM」。
 4. 预飞 1 岗跑通选择器 → 同路径复用；按 `references/cooldown_config.md` 间隔；撞墙即停。
 
 ### Step 3 · 读 JD / 招聘方
-单岗：`bash scripts/process_job.sh --url <岗URL> --read-jd --out recruiter_jd.json` → 解析 `.job-boss-info .name`（真实招聘方，**非登录账号**）/ `.job-sec-text`（完整 JD）/ `.sider-company`。
+单岗：`bash scripts/process_job.sh --url <岗URL> --read-jd --out recruiter_jd.json`（`<岗URL>` 用 `https://www.zhipin.com/job_detail/<jid>.html`，**去掉 `?securityId=...`**，见 `boss_selectors.md` 六/三）→ 解析 `.job-boss-info .name`（真实招聘方，**非登录账号**）/ `.job-sec-text`（完整 JD）/ `.sider-company`。读 JD 前用 `bz_wait $BZ_LEASE $BZ_TAB job-sec-text` 等渲染就绪，避免空串（见 `safety_rules.md` 十）。
 **批量（N 岗）禁止另写 `read_jd_batch.py`** → shell 循环复用单岗命令（白赚真实光标 + 撞墙检查 + 解析）：
 `for u in $(cat urls.txt); do bash scripts/process_job.sh --url "$u" --read-jd --out .work/jd_$((++n)).json; done`
 **输出契约**：每岗产出单元素 JSON 列表 `[{id,title,jd,recruiter,company}]`；合并为批量数组即话术**唯一 JD 依据**（见 `audit_icebreaker.py` 用法）。
@@ -88,6 +91,7 @@ description: >-
 
 ### Step 5 · 发送或仅本地（授权门控）
 - 用户**每岗**显式授权（`AUTHORIZED=1`）→ `bash scripts/process_job.sh --url <岗URL> --send --msg 话术.txt` 真实光标发送（发送前校验对话列表已有我方内容、称呼/岗位一致）。
+- ⚠️ **须前台、逐岗、人工实时在环执行，禁止委托无人值守后台批量跑**（即便已授权）：撞墙无人接手 / 无法中断 / 会话结束即死。仅只读操作可后台（见 `safety_rules.md` 红线）。
 - 未授权 → 仅产出本地文档（如 `破冰沟通YYYYMMDD.md`），**不发送**。
 
 ### Step 6 · 扫描聊天列表（可选）
@@ -113,7 +117,7 @@ description: >-
 | `scripts/audit_icebreaker.py` | 破冰话术自检 gate（JD≥90% + 事实≥90%） |
 | `scripts/parse_job.py` | 读JD 的 HTML DOM 解析（process_job 内部调用） |
 
-> 📌 **复用前必查 `references/script_catalog.md`**：任务 → 内置脚本精确命令映射 + 反模式清单。凡表中有脚本必须复用，禁止重写（见上方「🛑 脚本复用铁律」）。
+> 📌 **复用前必查 `references/script_catalog.md`**：任务 → 内置脚本精确命令映射 + 反模式清单。凡表中有脚本必须复用，禁止重写（见上方「🛑 优先复用与增量更新」）。
 
 ---
 
@@ -128,12 +132,15 @@ description: >-
 | `WORK_DIR` | `./.work` | 中间产物目录 |
 | `AUTHORIZED` | `0` | 发消息/书签授权（=1 才允许） |
 | `ACTION_INTERVAL_SECONDS` | `5` | 动作间隔下限 |
+| `COOLDOWN_JITTER` | `3` | 间隔随机抖动幅度（±秒，防机器特征） |
+| `BACKOFF_MAX` | `60` | 软限流指数退避上限（秒） |
 | `DAILY_CAP` | `100` | 每日收藏+开聊上限 |
 | `BOOKMARK_COOLDOWN` / `SEND_COOLDOWN` | `8` / `20` | 书签/发送间隔 |
 
 ---
 
 ## 错误处理
+- 失败分类与「异常 → 动作」完整表见 `references/safety_rules.md` 十（解析空/选择器漂移/撞墙/软限流/部分加载/网络/凭证未连接/日上限）。
 - 后端未就绪（`bz_status` 失败 / 缺 companion 扩展）→ 退出，不降级裸 CDP。
 - 撞验证墙 → `exit 3`，停手交人工，冷却 ≥24h。
 - 发送/书签未授权 → `exit 4` 拒绝。
@@ -143,6 +150,6 @@ description: >-
 
 ## 产物文件
 - `profile.yaml`：求职画像（输入契约）。
-- `target_library.csv`：目标岗位库（权威，去重主键=URL）。
+- `target_library.csv`：目标岗位库（权威，去重主键=BOSS URL 的 `job_detail/<jid>`；辅助键=(公司名+岗位名+BOSS称呼)，防同公司同岗不同招聘方被误并）。
 - `.work/recruiter_jd.json` / `.work/eval.json` / `.work/chat_scan.json`：中间产物。
 - `破冰沟通YYYYMMDD.md`：话术文档（未授权时本地成稿）。

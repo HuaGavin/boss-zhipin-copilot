@@ -27,7 +27,9 @@
 
 通用助手（由 `common.sh` 提供，后端可调用）：
 - `verify_wall <html>`：命中验证墙关键词即 fail-loud（exit 3）。
-- `cooldown <secs>`：限速 sleep。
+- `cooldown <secs>`：限速 sleep（含 ±`COOLDOWN_JITTER` 抖动）。
+- `rate_backoff`：软限流指数退避（间隔按 2^(n-1) 拉长，封顶 `BACKOFF_MAX`），命中「操作频繁」时调用。
+- `bz_wait <lease> <tab> <token> [timeout] [interval]`：轮询当前页直到 `token` 元素出现（就绪闸门），超时 fail-loud；hosted 直接 return 0。
 - `backend_is_hosted`：返回 0 当且仅当 `bz_mode` 为 `hosted`。
 
 **安全纪律（R1–R9，见 safety_rules.md）对一切后端生效**：真实光标、限速、撞墙停手≥24h、授权门控、合并打开复用 lease、预飞复制、单 lease。后端只是「手部」，纪律不变。

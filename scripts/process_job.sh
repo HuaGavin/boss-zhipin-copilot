@@ -64,11 +64,18 @@ fail_loud_if_down
 
 # ---- 自管模式：开 lease + tab ----
 if [ "$SELF_MANAGED" -eq 1 ]; then
-  cooldown "${BOOKMARK_COOLDOWN:-$ACTION_INTERVAL_SECONDS}"
+  cooldown "${BOOKMARK_COOLDOWN:-${ACTION_INTERVAL_SECONDS:-5}}"
   bz_browse_start "$URL" enhanced || { echo "FAIL_LOUD: browse-start 失败" >&2; exit 1; }
   LEASE="$BZ_LEASE"; TAB="$BZ_TAB"
   cleanup(){ [ "$KEEP" -eq 0 ] && bz_browse_end "$LEASE" || true; }
   trap cleanup EXIT
+fi
+
+# ---- 复用模式：同 tab 导航到目标岗（自管模式 browse-start 已带 URL）----
+if [ "$SELF_MANAGED" -eq 0 ]; then
+  cooldown "${ACTION_INTERVAL_SECONDS:-5}"
+  bz_browse_nav "$LEASE" "$TAB" "$URL" >/dev/null || { echo "FAIL_LOUD: browse-nav 失败" >&2; exit 1; }
+  sleep 3
 fi
 
 # ---- 读取页面，撞墙检查 ----
@@ -78,7 +85,7 @@ verify_wall "$HTML"
 # ---- 书签（点「感兴趣」）----
 if [ "$BOOKMARK" -eq 1 ]; then
   bump_daily_cap   # R3 日限额（改状态动作）
-  [ "$SELF_MANAGED" -eq 0 ] && cooldown "${BOOKMARK_COOLDOWN:-$ACTION_INTERVAL_SECONDS}"
+  [ "$SELF_MANAGED" -eq 0 ] && cooldown "${BOOKMARK_COOLDOWN:-${ACTION_INTERVAL_SECONDS:-5}}"
   WF=$(bz_ui "$TAB" wait-for --selector ".btn-interest" 2>&1) || true
   echo "$WF" | grep -qi "verify\|验证码" && { echo "FAIL_LOUD: 撞验证墙"; exit 3; }
   bz_ui "$TAB" click --selector ".btn-interest" 2>&1 || { echo "[warn] 选择器未命中(.btn-interest)，请人工核对" >&2; }
@@ -117,18 +124,49 @@ if [ "$SEND" -eq 1 ]; then
   [ -f "$MSG" ] || { echo "FAIL_LOUD: 消息文件不存在: $MSG" >&2; exit 1; }
   TEXT=$(cat "$MSG")
   bump_daily_cap   # R3 日限额（改状态动作）
-  cooldown "${SEND_COOLDOWN:-$ACTION_INTERVAL_SECONDS}"
-  WF=$(bz_ui "$TAB" wait-for --selector ".btn-chat" 2>&1) || true
-  echo "$WF" | grep -qi "verify\|验证码" && { echo "FAIL_LOUD: 撞验证墙"; exit 3; }
-  bz_ui "$TAB" click --selector ".btn-chat" 2>&1 || { echo "[warn] 选择器未命中(.btn-chat)，请人工核对" >&2; }
-  sleep 2
-  bz_ui "$TAB" click --selector ".chat-input" 2>&1 || { echo "[warn] 选择器未命中(.chat-input)，请人工核对" >&2; }
-  bz_ui "$TAB" type --text "$TEXT" 2>&1
-  bz_ui "$TAB" click --selector ".btn-send" 2>&1 || { echo "[warn] 选择器未命中(.btn-send)，请人工核对" >&2; }
-  HTML3=$(bz_browse_html "$LEASE" "$TAB" 2>&1)
-  if echo "$HTML3" | grep -q "$TEXT"; then
-    echo "[ok] 消息已发送 (页面含该文本)"
-  else
-    echo "[warn] 未确认发送, 请人工核对截图"
+  cooldown "${SEND_COOLDOWN:-${ACTION_INTERVAL_SECONDS:-20}}"
+  # 选择器为 2026-07-20 实战校准值（见 boss_selectors.md 三）
+  # 岗位关闭（无 .btn-startchat 且页面含「职位已关闭」）→ 跳过不算撞墙
+  if echo "$HTML" | grep -q "职位已关闭"; then
+    echo "[skip] 该岗位已关闭，跳过发送（请在岗位库标记「岗位关闭」）"; exit 6
   fi
+  WF=$(bz_ui "$TAB" wait-for --selector ".btn-startchat" 2>&1) || true
+  echo "$WF" | grep -qi "verify\|验证码" && { echo "FAIL_LOUD: 撞验证墙"; exit 3; }
+  bz_ui "$TAB" click --selector ".btn-startchat" 2>&1 || { echo "[warn] 选择器未命中(.btn-startchat)，请人工核对" >&2; }
+  sleep 3
+  # 输入框：聊天弹窗为 #chat-input(contenteditable)，旧版为 textarea.input-area，依次尝试
+  if ! bz_ui "$TAB" click --selector "#chat-input" >/dev/null 2>&1; then
+    bz_ui "$TAB" click --selector "textarea.input-area" 2>&1 || { echo "[warn] 输入框未命中(#chat-input / textarea.input-area)" >&2; }
+  fi
+  bz_ui "$TAB" type --text "$TEXT" 2>&1
+  sleep 1
+  if ! bz_ui "$TAB" click --selector ".btn-send" >/dev/null 2>&1; then
+    bz_ui "$TAB" click --selector ".send-message" 2>&1 || { echo "[warn] 发送按钮未命中(.btn-send / .send-message)" >&2; }
+  fi
+  sleep 3
+  HTML3=$(bz_browse_html "$LEASE" "$TAB" 2>&1)
+  SNIPPET=$(printf '%s' "$TEXT" | head -c 60)   # 前 ~20 个汉字做固定串校验
+  # 严格送达判定：编辑框已清空(草稿不残留) 且 页面消息区含话术前缀（含 [送达] 更佳）
+  # 注意：不能「管道 + heredoc」同喂 stdin（heredoc 抢占 stdin 致 SIGPIPE/141），改走临时文件
+  HTML_TMP=$(mktemp); printf '%s' "$HTML3" > "$HTML_TMP"
+  VERDICT=$("$PYTHON" - "$HTML_TMP" "$SNIPPET" <<'PY'
+import sys, re
+html = open(sys.argv[1], encoding="utf-8", errors="ignore").read(); snip = sys.argv[2]
+m = re.search(r'id="chat-input"[^>]*>(.*?)</div>', html, re.S)
+editor = (m.group(1).strip() if m else "")
+in_editor = snip in editor
+in_page = snip in html
+delivered = 'status-delivery' in html
+if in_page and not in_editor: print("SENT" + ("_DELIVERED" if delivered else ""))
+elif in_editor: print("DRAFT_ONLY")
+else: print("UNKNOWN")
+PY
+)
+  rm -f "$HTML_TMP"
+  case "$VERDICT" in
+    SENT_DELIVERED) echo "[ok] 消息已发送并送达 ([送达] 标记确认)";;
+    SENT)           echo "[ok] 消息已发送 (编辑框已清空, 消息区含话术)";;
+    DRAFT_ONLY)     echo "FAIL_LOUD: 话术仍在输入框草稿态，未发送成功，请人工核对" >&2; exit 7;;
+    *)              echo "[warn] 未确认发送, 请人工核对截图";;
+  esac
 fi

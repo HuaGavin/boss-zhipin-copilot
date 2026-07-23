@@ -11,8 +11,10 @@ set -euo pipefail
 #   3. <repo>/../../agent-browser-runtime/cli/brs.js   （仓库的兄弟目录；repo = backends/.. = scripts/.. = 仓库根）
 #   4. $HOME/agent-browser-runtime/cli/brs.js
 #   5. $HOME/.agent-browser-runtime/cli/brs.js
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# ⚠️ 本文件被 source 进调用方 shell——严禁用 SCRIPT_DIR 等通用变量名（会覆盖调用方同名变量，
+#    曾致 search_jobs.sh 的 parse_search.py 路径错乱）。一律用 BRS_ 前缀。
+BRS_SH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$BRS_SH_DIR/../.." && pwd)"
 resolve_brs() {
   if [ -n "${BRS_JS:-}" ]; then return 0; fi
   local candidates=(
@@ -68,8 +70,23 @@ bz_browse_start() {
 }
 
 bz_browse_html() {
-  local lease="$1" tab="$2"
-  brs browse-html "$lease" "$tab" 2>&1
+  # brs browse-html 返回 artifact JSON（{"path":"artifacts/..."}），非 HTML 本体。
+  # 这里解包：解析 path 并 cat 出真实 HTML，供调用方 grep（撞墙检查/送达校验依赖此语义）。
+  local lease="$1" tab="$2" out p root
+  out=$(brs browse-html "$lease" "$tab" 2>&1) || { echo "$out"; return 1; }
+  p=$(printf '%s' "$out" | "$PYTHON" -c 'import sys,json
+try:
+    j=json.loads(sys.stdin.read()); print(j.get("path") or j.get("artifact",{}).get("path") or "")
+except Exception:
+    print("")') || true
+  if [ -n "$p" ]; then
+    root="$(cd "$(dirname "$BRS_JS")/.." && pwd)"   # brs.js 位于 <runtime>/cli/
+    if [ -f "$root/$p" ]; then cat "$root/$p"; return 0; fi
+    [ -f "$p" ] && { cat "$p"; return 0; }
+    echo "FAIL_LOUD: artifact 文件不存在: $root/$p" >&2; return 1
+  fi
+  # 无 path 字段则按原样输出（兼容未来直接返回 HTML 的实现）
+  printf '%s' "$out"
 }
 
 # 复用同一 lease/tab 导航到新 URL（不重开 tab，落实「禁止频繁开关 tab」）

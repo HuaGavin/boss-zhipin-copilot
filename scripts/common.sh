@@ -11,9 +11,27 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backends"
 
-# node / python 可执行：默认用 PATH 上的 node / python3，可用 NODE / PYTHON 覆盖
+# node / python 可执行解析（兼容 Windows Git Bash 的 win-native 路径坑）
+# 优先级：环境变量 PYTHON > PATH python3(Windows 须 win-native) > WorkBuddy 受管 python > 回退 python3
+# Windows Git Bash 下严禁混用 WSL/MSYS 的 python（路径/编码错乱）；受管路径用 /c/... 形式。
+resolve_python() {
+  if [ -n "${PYTHON:-}" ]; then printf '%s' "$PYTHON"; return 0; fi
+  local p
+  if p=$(command -v python3 2>/dev/null) && [ -n "$p" ]; then
+    case "$(uname -s 2>/dev/null)" in
+      MINGW*|MSYS*|CYGWIN*) ;;
+      *) printf '%s' "$p"; return 0;;
+    esac
+    if "$p" -c 'import sys; sys.exit(0 if sys.platform.startswith(("win","cygwin")) else 1)' 2>/dev/null; then
+      printf '%s' "$p"; return 0
+    fi
+  fi
+  local mgr="$HOME/.workbuddy/binaries/python/versions/3.13.12/python.exe"
+  if [ -x "$mgr" ]; then printf '%s' "$mgr"; return 0; fi
+  printf '%s' "python3"
+}
+PYTHON="$(resolve_python)"
 NODE="${NODE:-node}"
-PYTHON="${PYTHON:-python3}"
 
 # ---- 浏览器后端探测 + 加载 ----
 BZC_BACKEND="${BZC_BACKEND:-brs}"
@@ -47,10 +65,53 @@ verify_wall() {
   fi
 }
 
-# ---- 冷却 sleep ----
+# ---- 冷却 sleep（含人体化抖动）----
+# 固定 sleep 易被反作弊识别为机器节奏；叠加 ±COOLDOWN_JITTER 抖动更接近真人。
 cooldown() {
-  local secs="${1:-${ACTION_INTERVAL_SECONDS:-5}}"
+  local base="${1:-${ACTION_INTERVAL_SECONDS:-5}}"
+  local jitter="${COOLDOWN_JITTER:-3}"
+  local secs=$base
+  if [ "$jitter" -gt 0 ]; then
+    local delta=$(( (RANDOM % (jitter * 2 + 1)) - jitter ))
+    secs=$((base + delta))
+    [ "$secs" -lt 1 ] && secs=1
+  fi
   sleep "$secs"
+}
+
+# ---- 软限流指数退避（rate_backoff）----
+# 命中「操作频繁」提示或接近日上限时调用：间隔按 2^(n-1) 指数拉长，封顶 BACKOFF_MAX。
+rate_backoff_seq=0
+rate_backoff() {
+  rate_backoff_seq=$((rate_backoff_seq + 1))
+  local factor=$((1 << (rate_backoff_seq - 1)))
+  local secs=$(( (${ACTION_INTERVAL_SECONDS:-5}) * factor ))
+  local cap="${BACKOFF_MAX:-60}"
+  [ "$secs" -gt "$cap" ] && secs=$cap
+  echo "[backoff] 第 $rate_backoff_seq 次退避, 间隔 ${secs}s (封顶 $cap)" >&2
+  sleep "$secs"
+}
+
+# ---- 等待元素就绪（Item1：根治「面板未渲染完提取空串」）----
+# 用法：bz_wait <lease> <tab> <token> [timeout=20] [interval=1]
+#   token = 期望出现的 class / tag 名（自动去前导点）；轮询 browse-html 直到命中即返回 0。
+#   超时返回 1 + FAIL_LOUD。hosted 模式不本地驱动，直接 return 0。
+bz_wait() {
+  if backend_is_hosted; then echo "[hosted] 跳过本地等待" >&2; return 0; fi
+  local lease="$1" tab="$2" token="${3#.}" timeout="${4:-20}" interval="${5:-1}"
+  [ -z "$token" ] && { echo "FAIL_LOUD: bz_wait 缺 token" >&2; return 2; }
+  local elapsed=0 html
+  while [ "$elapsed" -lt "$timeout" ]; do
+    html=$(bz_browse_html "$lease" "$tab" 2>/dev/null) || true
+    if printf '%s' "$html" | grep -qE "class=\"[^\"]*\b$token\b" || printf '%s' "$html" | grep -qF ">$token<"; then
+      echo "[ok] 元素就绪: $token (${elapsed}s)" >&2
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
+  done
+  echo "FAIL_LOUD: 等待元素超时(${timeout}s 未出现): $token" >&2
+  return 1
 }
 
 # ---- 日限额计数器（R3，跨调用持久化）----
