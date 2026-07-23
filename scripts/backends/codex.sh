@@ -73,7 +73,7 @@ bz_emit_plan() {
     echo "   把以上字段原样返回给我（不要改写）。"
   fi
   if [ "$send" -eq 1 ]; then
-    echo "3) 点击「立即沟通」（.btn-chat）打开对话框，在 .chat-input 用真实键入粘贴下面这段话并发送（.btn-send）："
+    echo "3) 点击「立即沟通」（.btn-startchat）打开对话框，在 #chat-input 用真实键入粘贴下面这段话并发送（.btn-send）："
     echo "   ───── 破冰话术 ─────"
     if [ -n "$msg" ] && [ -f "$msg" ]; then cat "$msg"; else echo "（未提供 --msg 文件，请先由 audit_icebreaker 生成本地话术）"; fi
     echo "   ───────────────────"

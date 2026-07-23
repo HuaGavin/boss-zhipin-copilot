@@ -67,6 +67,53 @@
 
 > skill 强制**真实 UI 搜索**（键入 + 点搜索），禁止拼接 `?query=&city=&page=` 捷径 URL。
 
+### 结果页筛选器（✅ 2026-07-23 实测校准；hover 出下拉、复选、URL 侧证生效）
+
+搜索提交后结果页 URL 变为 `/web/geek/jobs`，**搜索框正下方**一排筛选触发器（实测 y≈140）。下拉显隐是**纯 CSS `:hover`**（选项 `li` 常驻 DOM，无 open/active 状态类）→ **读选项无需 hover，但真实光标点选前必须先 `ui move` 悬停到触发器让下拉可见**。
+
+| 结构 | 选择器 | 备注 |
+|---|---|---|
+| 筛选器容器 | `.condition-filter-select`（常规）/ `.condition-industry-select`（公司行业）/ `.condition-position-select`（职位类型） | 每个筛选一个容器 |
+| 触发器（hover 点位） | 容器内 `.current-select` | ⚠️ **禁用 `--targetText "公司规模"` 定位**——实测命中页面中部其它文本（y=428 非筛选栏 y=142）致 `UI target not found`；须用结构选择器，如 `.condition-filter-select:has(li[ka="sel-job-rec-scale-0"]) .current-select` |
+| 下拉面板 | `.filter-select-dropdown` → `ul.select-list` → `li[ka=...]` | `li` 的 `ka` 属性 = 唯一稳定点位 |
+
+**全部筛选器与 `ka` 编码**（`ka="sel-job-rec-<域>-<code>"`；`0`=不限）：
+
+| 筛选器 | 域 | 选项编码 | 复选 |
+|---|---|---|---|
+| 职位类型 | `sel-position-*` | 二级面板（互联网/AI、产品…） | — |
+| 求职类型 | `jobType` | 1901全职 / 1903兼职 | 单选 |
+| 薪资待遇 | `salary` | 402 3K以下 / 403 3-5K / 404 5-10K / 405 10-20K / 406 20-50K / 407 50K以上 | 单选 |
+| 工作经验 | `exp` | 108在校生 / 102应届生 / 101经验不限 / 103 1年内 / 104 1-3年 / 105 3-5年 / 106 5-10年 / 107 10年以上 | 复选 |
+| 学历要求 | `degree` | 209初中及以下 / 208中专中技 / 206高中 / 202大专 / 203本科 / 204硕士 / 205博士 | 复选 |
+| 公司行业 | （二级面板） | 大类行 `li.clearfix` 内嵌子项，无单值 ka；首次点选前须再实测 | — |
+| **公司规模** | `scale` | **301 0-20人 / 302 20-99人 / 303 100-499人 / 304 500-999人 / 305 1000-9999人 / 306 10000人以上** | **复选** |
+| 融资阶段 | `stage` | 801未融资 / 802天使轮 / 803A轮 / 804B轮 / 805C轮 / 806 D轮及以上 / 807已上市 / 808不需要融资 | 复选 |
+
+**实测操作配方（全程真实光标；6 维度通用）**：
+- **通用触发器选择器**（每维复用，把 `<dim>` 换成 scale/stage/exp/degree/salary/jobType）：
+  `ui move --selector '.condition-filter-select:has(li[ka="sel-job-rec-<dim>-0"]) .current-select'` → 悬停展开
+  `ui click --selector 'li[ka="sel-job-rec-<dim>-<code>"]'` → 点目标档
+- **每点一档后须重新 hover 一次**再点下一档（点选后下拉可能收起；复选维需逐档重复）。
+- **生效核验**：tab URL 出现对应参数（复选=逗号分隔），结果自动刷新。实测 6 维点选后 URL：
+  `.../jobs?city=...&jobType=1901&salary=406&experience=105&degree=203&scale=303&stage=804&query=...`
+  即 URL 参数名映射：**scale→scale / stage→stage / exp→experience / degree→degree / salary→salary / jobType→jobType**（注意 exp 在 URL 里叫 `experience`，但 `ka` 域仍是 `exp`）。
+- ⚠️ URL 参数**仅作生效核验，禁止直接拼 URL 导航**（R1 禁查询串捷径）；应用一律走真实光标 hover+click。
+
+**6 维度选值速查（与上方编码表一致；`0`=不限永不点选）**：
+
+| 维度 | 选值方式 | 常用编码 |
+|---|---|---|
+| 公司规模 scale | 复选 | 302 20-99人 / 303 100-499人 / 304 500-999人 |
+| 融资阶段 stage | 复选 | 802 天使 / 803 A / 804 B / 805 C / 806 D轮及以上 / 807 已上市 / 808 不需要融资 |
+| 工作经验 exp | 复选 | 102 应届 / 104 1-3年 / 105 3-5年 / 106 5-10年 / 107 10年以上 / 108 在校 |
+| 学历要求 degree | 复选 | 202 大专 / 203 本科 / 204 硕士 / 205 博士 |
+| 薪资待遇 salary | **单选** | 405 10-20K / 406 20-50K / 407 50K以上 |
+| 求职类型 jobType | **单选** | 1901 全职 / 1903 兼职 |
+
+- 筛选是本地搜索视图状态，不改账号状态（非收藏/沟通），属只读安全动作；换查询词重新搜索后筛选**是否保留未实测**，稳妥做法=每词搜索后重新应用（`search_jobs.sh` 已落实）。
+- `search_jobs.sh` 现已内置**全 6 维度**筛选：`--intent "自由文本"`（自动解析意图）、或 `--scale/--stage/--exp/--degree/--salary/--jobtype` 逐维覆盖；未显式给的维度从 profile `thresholds` 推导（见 `intent_filters.py` 与 `script_catalog`）。
+
 ---
 
 ## 六、个人中心 / 已知页面（导航目标，防盲试）

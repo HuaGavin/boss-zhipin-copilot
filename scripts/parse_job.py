@@ -72,8 +72,8 @@ class JobParser(HTMLParser):
         if "name" in top and self._inside("job-boss-info"):
             self.recruiter_buf.append(t)
 
-        # 公司：.sider-company 内
-        if "sider-company" in top:
+        # 公司：.sider-company 子树内（用 _inside 祖先链匹配，兼容规模/阶段在 <p> 子元素的结构）
+        if self._inside("sider-company"):
             self.company_buf.append(t)
 
         # 公司回退：.job-boss-info 整体文本

@@ -12,8 +12,9 @@
 |---|---|---|
 | 生成求职画像草稿 | `python3 scripts/build_profile.py --goal "..." [--resume 简历.md] --out profile.yaml` | 草稿，Agent 必须复核补全 `hard_exclude` / `boost_keywords` / `fact_anchors` |
 | 初始化空岗位库 | `bash scripts/setup_library.sh`（可用 `LIB_CSV` 指定路径） | 按模板生成 `target_library.csv` |
-| **多词检索 + 收集结果卡（只读）** | `bash scripts/search_jobs.sh --profile profile.yaml --out .work/candidates.csv` | 查询词取自 `profile.search.queries`（或 `--queries "a,b"`）；走 `bz_*` 真实光标、复用同 tab；产 `candidates.csv`（岗位名/公司名/城市/经验要求/URL，**无薪资**）。内部调 `parse_search.py` |
-| **过滤 + 打分 + 去重（只读候选清单，不动账号）** | `python3 scripts/filter_library.py --profile profile.yaml --input 待评估.csv --out .work/eval.json` | **省略 `--library` = 不入库、只产出 `eval.json`（`passed`/`rejected` + 评分）**；需 Top-N 自行按「评分」截断排序 |
+| **多词检索 + 收集结果卡（只读，源头六维筛选）** | `bash scripts/search_jobs.sh --profile profile.yaml --out .work/candidates.csv [--intent "自然语言意图"] [--scale "302,303"] [--stage 804,805] [--exp 106] [--degree 203] [--salary 406] [--jobtype 1901]` | 查询词取自 `profile.search.queries`（或 `--queries "a,b"`）；走 `bz_*` 真实光标、复用同 tab；产 `candidates.csv`（岗位名/公司名/城市/经验要求/URL，**无薪资**）。内部调 `parse_search.py` + `intent_filters.py`。**六维度筛选在结果页源头应用**：`--intent "文本"` 自动解析隐含条件（如"B轮以上中型公司"），否则由 `profile.thresholds` 推导（scale_min/max、salary_floor、seniority_years），或显式 `--scale/--stage/--exp/--degree/--salary/--jobtype` 覆盖（优先级：profile < intent < 显式）。**源头筛掉不符岗，勿等读 JD 才筛**；编码/点位/应用配方见 `boss_selectors.md` 五「结果页筛选器」 |
+| **解析求职意图 → 筛选编码** | `python3 scripts/intent_filters.py parse "自然语言" [--profile p.yaml]` | 自由文本 → FilterSpec（意图覆盖 profile 默认）；`build` 子命令合并 profile+意图+显式维度覆盖；`apply-plan` 输出可点击 TSV。**复用内置，禁现写等价解析** |
+| **过滤 + 打分 + 去重（只读候选清单，不动账号）** | `python3 scripts/filter_library.py --profile profile.yaml --input candidates.csv --out .work/eval.json` | **省略 `--library` = 不入库、只产出 `eval.json`（`passed`/`rejected` + 评分）**；需 Top-N 自行按「评分」截断排序 |
 | **过滤 + 打分 + 去重 + 入库** | `... --library target_library.csv` | 通过项追加进库（状态=已收藏(感兴趣)），按 URL 去重 |
 | 单岗读 JD / 招聘方 | `bash scripts/process_job.sh --url <url> --read-jd --out .work/recruiter_jd.json` | 内部调 `parse_job.py`；真实招聘方 = `.job-boss-info .name`（**非 `user-nav` 本人**） |
 | **批量读 JD（N 个）** | `for u in $(cat urls.txt); do bash scripts/process_job.sh --url "$u" --read-jd --out .work/jd_$((++n)).json; done` | **禁止另写 `read_jd_batch.py`**；循环复用单岗命令，白赚真实光标 + 撞墙检查 + 解析 |
@@ -30,6 +31,7 @@
 - **多词检索**：`scripts/search_jobs.sh`（走 `bz_*` 契约、复用同 tab、只读、hosted 短路 emit_plan）。禁再写 `run_searches.sh` 等价物。
 - **卡片解析**：`scripts/parse_search.py`（解析 `a.job-name` / `.boss-name` / `.company-location` / `.tag-list`；**不提取薪资**——卡片薪资被字体反爬混淆）。由 `search_jobs.sh` 内部调用。
 - 选择器见 `references/boss_selectors.md`：搜索框 `.search-input-box .input` + `.search-btn`；卡片 `a.job-name`/`.boss-name`/`.company-location`/`.tag-list`。首次跑预飞 1 词校验。
+- **结果页筛选器**（公司规模/融资阶段/工作经验/学历要求/薪资待遇/求职类型，hover 出下拉、部分复选）：点位与 `ka` 编码全表见 `boss_selectors.md` 五「结果页筛选器」。**六维度全覆盖已内置**——`search_jobs.sh` 经 `intent_filters.py` 自动把 profile / 用户自然语言意图 / 显式参数 映射成筛选编码并 hover→click 应用。`intent_filters.py` 是「中文意图 ↔ BOSS 编码」唯一事实来源（禁现写等价解析）。应用配方：触发器用**结构选择器** `.condition-filter-select:has(li[ka="sel-job-rec-<dim>-0"]) .current-select` 定位，禁 `--targetText` 文本定位（会命中页面其它文本）；每点一档后须重新 hover 再点下一档。
 
 ---
 

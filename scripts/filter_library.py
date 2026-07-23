@@ -3,16 +3,16 @@
 """
 filter_library.py - profile 驱动的岗位过滤 + 评分 + （可选）入库。
 用法:
-  python3 scripts/filter_library.py --profile profile.yaml --input 待评估.csv \
+  python3 scripts/filter_library.py --profile profile.yaml --input candidates.csv \
       [--out 评估结果.json] [--library target_library.csv] [--id-prefix BJ]
 
 说明:
-  - input: 待评估岗位 CSV（搜索结果导出，或现有库）。按表头字典映射，列名灵活。
+  - input: candidates 岗位 CSV（搜索结果导出，或现有库）。按表头字典映射，列名灵活。
   - profile: 驱动硬排除 / 门槛 / 加分关键词（见 references/profile_schema.md）。
   - 若给 --library，则把「通过」且库中无同 URL 的岗位追加进库（状态=已收藏(感兴趣)）。
   - 输出 JSON: {passed:[...], rejected:[...], summary:{...}}
 """
-import argparse, csv, json, re, sys, datetime
+import argparse, csv, json, re, sys, datetime, os
 
 try:
     import yaml
@@ -159,7 +159,7 @@ def evaluate(row, profile, colmap):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", default="profile.yaml")
-    ap.add_argument("--input", required=True, help="待评估 CSV")
+    ap.add_argument("--input", required=True, help="candidates CSV")
     ap.add_argument("--out", default=".work/eval_result.json")
     ap.add_argument("--library", help="可选：通过项追加进此库 CSV")
     ap.add_argument("--id-prefix", default="BJ")
@@ -203,7 +203,6 @@ def main():
         "passed": passed,
         "rejected": rejected,
     }
-    import os
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     json.dump(out, open(args.out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 

@@ -17,6 +17,12 @@
 #   - 选择器见 references/boss_selectors.md（待校准项首次须复核）
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Windows Git Bash 下 win-native python 收不到 POSIX 路径（MSYS 把 C:/Users 错转成 C:\c\Users），
+# 用 cygpath 转 Windows 原生路径给 python 用；带 fallback，非 Windows 不动。
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*) SCRIPT_DIR_W="$(cygpath -w "$SCRIPT_DIR" 2>/dev/null || echo "$SCRIPT_DIR")";;
+  *) SCRIPT_DIR_W="$SCRIPT_DIR";;
+esac
 
 # ---- 统一授权门控（最早执行，必须在 source common.sh / 加载后端之前）----
 # F9/F10: 书签与发送均属「改账号状态动作」，需 AUTHORIZED=1 才放行。提到最前可保证
@@ -102,7 +108,7 @@ if [ "$READJD" -eq 1 ]; then
   mkdir -p "$(dirname "$OUT_JSON")"
   PARSED=$(mktemp)
   # 用稳健的 DOM 解析（parse_job.py）替换脆弱正则；HTML 经 stdin 传入
-  "$PYTHON" "$SCRIPT_DIR/parse_job.py" --url "$URL" >"$PARSED" <<<"$HTML" \
+  "$PYTHON" "$SCRIPT_DIR_W/parse_job.py" --url "$URL" >"$PARSED" <<<"$HTML" \
     || { echo "FAIL_LOUD: parse_job.py 解析 JD 失败" >&2; rm -f "$PARSED"; exit 1; }
   # 单 dict 包成单元素列表写入（满足 audit_icebreaker.py 的「列表」契约，见 C1）
   "$PYTHON" - "$OUT_JSON" "$PARSED" <<'PY'
@@ -145,7 +151,7 @@ if [ "$SEND" -eq 1 ]; then
   fi
   sleep 3
   HTML3=$(bz_browse_html "$LEASE" "$TAB" 2>&1)
-  SNIPPET=$(printf '%s' "$TEXT" | head -c 60)   # 前 ~20 个汉字做固定串校验
+  SNIPPET=$("$PYTHON" -c "import sys;d=sys.stdin.buffer.read().decode('utf-8','ignore');print(d[:20])" <<<"$TEXT")   # 取话术前 20 字符做固定串校验（字符级，避免 head -c 字节截断半字误判）
   # 严格送达判定：编辑框已清空(草稿不残留) 且 页面消息区含话术前缀（含 [送达] 更佳）
   # 注意：不能「管道 + heredoc」同喂 stdin（heredoc 抢占 stdin 致 SIGPIPE/141），改走临时文件
   HTML_TMP=$(mktemp); printf '%s' "$HTML3" > "$HTML_TMP"

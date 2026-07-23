@@ -117,15 +117,15 @@ python3 scripts/build_profile.py \
 # 1) 初始化岗位库
 bash scripts/setup_library.sh
 
-# 2) 在 BOSS 用真实 UI 搜索 profile.search.queries，收集结果卡片到 待评估.csv
+# 2) 在 BOSS 用真实 UI 搜索 profile.search.queries，收集结果卡片到 candidates.csv
 #    （Agent 执行；禁止拼接搜索 URL 捷径）
 #    然后过滤 + 评分 + 入库：
 python3 scripts/filter_library.py \
-  --profile profile.yaml --input 待评估.csv \
+  --profile profile.yaml --input candidates.csv \
   --library target_library.csv --out .work/eval.json
 
 # 3) 对每个通过项书签（真实光标）
-bash scripts/process_job.sh --url <岗位URL> --bookmark
+AUTHORIZED=1 bash scripts/process_job.sh --url <岗位URL> --bookmark
 
 # 4) 读 JD（备话术）
 bash scripts/process_job.sh --url <岗位URL> --read-jd --out .work/recruiter_jd.json

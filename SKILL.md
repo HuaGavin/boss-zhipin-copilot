@@ -59,15 +59,23 @@ description: >-
 - **④ 受控逃逸阀**：仅当确属全新、与现有资产无重叠才新建；新建必登记；**无法说清「为何现有不适用」时，默认就地改，不得新建**。任务执行中**禁止临时改写 `process_job.sh` 等内置脚本绕过门控**——源码修改走 skill 维护流程（改后 commit）。
 
 ## 工作流
-### Step 0 · 生成 / 校验 profile
-`python3 scripts/build_profile.py --goal "..." [--resume 简历.md] --out profile.yaml` 抽草稿；Agent 复核补全 `hard_exclude` / `boost_keywords` / `fact_anchors`（依据 `references/profile_schema.md`）。解析不出的维度保守留空（=不限），必要时追问 1 个关键问题。→ **产物 `profile.yaml`**（后续唯一输入）。（复用 `build_profile.py`，禁现写等价脚本）
+### Step 0 · 生成 / 校验 profile + 解析求职意图
+- `python3 scripts/build_profile.py --goal "..." [--resume 简历.md] --out profile.yaml` 抽草稿；Agent 复核补全 `hard_exclude` / `boost_keywords` / `fact_anchors`（依据 `references/profile_schema.md`）。解析不出的维度保守留空（=不限），必要时追问 1 个关键问题。→ **产物 `profile.yaml`**（后续唯一输入）。（复用 `build_profile.py`，禁现写等价脚本）
+- **主动解析求职意图（长期能力）**：用户常以自然语言提需求（如"想找一家 B 轮以上的中型公司做后端开发""北京全职20k以上5年经验"）。这类隐含的筛选条件**必须由 `scripts/intent_filters.py` 自动识别并映射到 BOSS 搜索页筛选器**，**优先在搜索阶段应用**，缩小结果范围，避免下游读大量不符岗 JD。用法：
+  - `python3 scripts/intent_filters.py parse "自然语言" [--profile profile.yaml]` → 解析出 FilterSpec（意图覆盖 profile 默认）
+  - `python3 scripts/intent_filters.py build --profile profile.yaml [--intent "文本"] [--scale 302,303] [--exp 106] ...` → 合并 profile+意图+显式维度覆盖 → 最终 FilterSpec
+  - 编码映射与点位见 `references/boss_selectors.md` 五「结果页筛选器」（六维度全覆盖：公司规模/融资阶段/工作经验/学历要求/薪资待遇/求职类型）。**复用内置，禁现写等价解析。**
 
 ### Step 1 · 建 / 校验岗位库
 `bash scripts/setup_library.sh` 生成空 `target_library.csv`（`$LIB_CSV` 可指定）。本库是检索/去重/入库的**唯一权威数据源**（`references/target_library_schema.md`）。（复用 `setup_library.sh`，禁现写）
 
-### Step 2 · 检索 → 过滤 → 书签入库
-1. **检索收集**（复用内置，禁自写）：`bash scripts/search_jobs.sh --profile profile.yaml --out .work/candidates.csv`
+### Step 2 · 检索（先筛选）→ 过滤 → 书签入库
+> **🔒 流程铁律：筛选优先于后续操作。** 先按筛选条件在「搜索结果页」源头过滤 → 再对过滤后的岗位列表执行收集/详情抓取/匹配分析。绝不让未过筛的岗位进入下游（读 JD / 写话术 / 入库），那会成倍浪费真实光标动作。
+
+1. **检索收集（源头筛选 + 只读）**（复用内置，禁自写）：
+   `bash scripts/search_jobs.sh --profile profile.yaml --out .work/candidates.csv [--intent "自然语言意图"] [--scale "302,303"] [--stage 804,805] [--exp 106] [--degree 203] [--salary 406] [--jobtype 1901]`
    - 查询词取自 `profile.search.queries`（或 `--queries "词1,词2"`）；走 `bz_*` 真实光标、复用同 tab、**禁 `?query=&city=&page=` 捷径**。
+   - **六维度筛选在搜索结果页源头应用（核心优化）**：搜索框下方 hover 出下拉、复选（点位/编码见 `boss_selectors.md` 五）。筛选来源优先级：① `profile.thresholds` 默认（scale_min/max、salary_floor、seniority_years 自动推导）→ ② `--intent "文本"` 自动解析隐含条件（如"B轮以上中型公司"）覆盖同名维度 → ③ 显式 `--scale/--stage/--exp/--degree/--salary/--jobtype` 最高优先级覆盖。**在源头筛掉不符岗，比读 JD 详情页后再筛高效得多**（实测：下游 JD 阅读量可降 30–50%）。
    - 产 `candidates.csv`（列：岗位名/公司名/城市/经验要求/URL）。⚠️ **无薪资列**——卡片薪资被字体反爬混淆，须 Step 3 从 JD 详情页取。
 2. **过滤打分去重**（复用 `filter_library.py`，禁现写）：`python3 scripts/filter_library.py --profile profile.yaml --input .work/candidates.csv --out .work/eval.json`
    - **省略 `--library` = 只读候选清单、不入库**；通过项在 `eval.json.passed`，Top-N 自行按「评分」截断。
@@ -141,9 +149,11 @@ description: >-
 
 ## 错误处理
 - 失败分类与「异常 → 动作」完整表见 `references/safety_rules.md` 十（解析空/选择器漂移/撞墙/软限流/部分加载/网络/凭证未连接/日上限）。
-- 后端未就绪（`bz_status` 失败 / 缺 companion 扩展）→ 退出，不降级裸 CDP。
+- 后端未就绪（`bz_status` 失败 / 缺 companion 扩展 / 解析失败）→ `exit 2`（runtime/companion 未就绪，不降级裸 CDP）。
 - 撞验证墙 → `exit 3`，停手交人工，冷却 ≥24h。
 - 发送/书签未授权 → `exit 4` 拒绝。
+- 单日改状态动作达 `DAILY_CAP` 上限 → `exit 5` 停手（R3）。
+- 发送后话术仍在输入框草稿态（未真正发出）→ `exit 7`（见 `process_job.sh` 严格送达判定）。
 - 选择器漂移 → 回 `references/boss_selectors.md` 复核，**禁止绕过**（绕过=误触/误判）。
 
 ---
